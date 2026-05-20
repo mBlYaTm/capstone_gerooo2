@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-05-07T11:33:24.116369",
+  "config": {
+    "users": 20,
+    "requests_per_user": 5
+  },
+  "results": {
+    "total_requests": 100,
+    "successful": 70,
+    "failed": 30,
+    "pass_rate_percent": 70.0,
+    "total_time_seconds": 14.89,
+    "requests_per_second": 6.7
+  },
+  "response_times_ms": {
+    "min": 2224.4,
+    "average": 2905.1,
+    "p50": 2923.1,
+    "p95": 3095.1,
+    "p99": 3158.4,
+    "max": 3158.4
+  }
+}

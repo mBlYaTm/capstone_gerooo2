@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  # Redis - Zero-persistence горимд (диск рүү хадгалахгүй)
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --save "" --appendonly no
+    restart: unless-stopped
+
+  # Redis Prometheus Exporter - Grafana-д өгөгдөл дамжуулна
+  redis-exporter:
+    image: oliver006/redis_prometheus_exporter
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    depends_on:
+      - redis
+
+  # Grafana - Dashboard
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
