@@ -1,1025 +1,702 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zero-Persistence Token System</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<title>ZeroPersist — Security Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #080c10;
-    --surface: #0d1420;
-    --surface2: #111827;
-    --border: #1e2d40;
-    --accent: #00d4ff;
-    --accent2: #00ff88;
-    --danger: #ff4444;
-    --warn: #ffaa00;
-    --text: #e2e8f0;
-    --muted: #4a5568;
-    --glow: 0 0 20px rgba(0, 212, 255, 0.15);
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Syne', sans-serif;
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
-
-  /* Animated grid background */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  /* Glowing orbs */
-  body::after {
-    content: '';
-    position: fixed;
-    top: -200px;
-    right: -200px;
-    width: 600px;
-    height: 600px;
-    background: radial-gradient(circle, rgba(0,212,255,0.06) 0%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  .container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 24px;
-    position: relative;
-    z-index: 1;
-  }
-
-  /* ── HEADER ── */
-  header {
-    padding: 24px 0 20px;
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 0;
-    background: rgba(8,12,16,0.92);
-    backdrop-filter: blur(12px);
-    z-index: 100;
-  }
-
-  .header-inner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .logo-icon {
-    width: 36px;
-    height: 36px;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    animation: pulse 3s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(0,212,255,0.4); }
-    50% { box-shadow: 0 0 0 8px rgba(0,212,255,0); }
-  }
-
-  .logo-text {
-    font-size: 16px;
-    font-weight: 800;
-    letter-spacing: -0.5px;
-  }
-
-  .logo-text span { color: var(--accent); }
-
-  .status-badge {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 14px;
-    background: rgba(0,255,136,0.08);
-    border: 1px solid rgba(0,255,136,0.2);
-    border-radius: 20px;
-    font-family: 'Space Mono', monospace;
-    font-size: 11px;
-    color: var(--accent2);
-  }
-
-  .status-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--accent2);
-    animation: blink 2s ease-in-out infinite;
-  }
-
-  @keyframes blink {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
-  }
-
-  /* ── HERO ── */
-  .hero {
-    padding: 60px 0 40px;
-    text-align: center;
-  }
-
-  .hero-tag {
-    display: inline-block;
-    padding: 4px 12px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    font-family: 'Space Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    margin-bottom: 20px;
-  }
-
-  .hero h1 {
-    font-size: clamp(32px, 5vw, 56px);
-    font-weight: 800;
-    line-height: 1.1;
-    letter-spacing: -2px;
-    margin-bottom: 16px;
-  }
-
-  .hero h1 .accent { color: var(--accent); }
-  .hero h1 .accent2 { color: var(--accent2); }
-
-  .hero p {
-    color: var(--muted);
-    font-size: 15px;
-    max-width: 480px;
-    margin: 0 auto 36px;
-    line-height: 1.7;
-  }
-
-  /* ── STATS ROW ── */
-  .stats-row {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 40px;
-  }
-
-  .stat-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-    position: relative;
-    overflow: hidden;
-    transition: border-color 0.3s, transform 0.2s;
-  }
-
-  .stat-card:hover {
-    border-color: var(--accent);
-    transform: translateY(-2px);
-    box-shadow: var(--glow);
-  }
-
-  .stat-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, var(--accent), var(--accent2));
-    opacity: 0;
-    transition: opacity 0.3s;
-  }
-
-  .stat-card:hover::before { opacity: 1; }
-
-  .stat-label {
-    font-family: 'Space Mono', monospace;
-    font-size: 10px;
-    color: var(--muted);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    margin-bottom: 10px;
-  }
-
-  .stat-value {
-    font-size: 32px;
-    font-weight: 800;
-    letter-spacing: -1px;
-    color: var(--accent);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .stat-sub {
-    font-size: 11px;
-    color: var(--muted);
-    margin-top: 4px;
-  }
-
-  /* ── MAIN GRID ── */
-  .main-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    margin-bottom: 20px;
-  }
-
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 24px;
-    transition: border-color 0.3s;
-  }
-
-  .card:hover { border-color: rgba(0,212,255,0.3); }
-
-  .card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
-  }
-
-  .card-title {
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .card-title .icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-  }
-
-  .icon-blue { background: rgba(0,212,255,0.1); }
-  .icon-green { background: rgba(0,255,136,0.1); }
-  .icon-red { background: rgba(255,68,68,0.1); }
-  .icon-yellow { background: rgba(255,170,0,0.1); }
-
-  /* ── FORM FIELDS ── */
-  .form-group { margin-bottom: 14px; }
-
-  .form-label {
-    font-family: 'Space Mono', monospace;
-    font-size: 10px;
-    color: var(--muted);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-    display: block;
-  }
-
-  .form-input {
-    width: 100%;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 14px;
-    color: var(--text);
-    font-family: 'Space Mono', monospace;
-    font-size: 12px;
-    outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
-  }
-
-  .form-input:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(0,212,255,0.1);
-  }
-
-  .form-input::placeholder { color: var(--muted); }
-
-  /* ── BUTTONS ── */
-  .btn {
-    width: 100%;
-    padding: 11px;
-    border: none;
-    border-radius: 8px;
-    font-family: 'Syne', sans-serif;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s;
-    letter-spacing: 0.5px;
-  }
-
-  .btn-primary {
-    background: linear-gradient(135deg, var(--accent), #0099bb);
-    color: #080c10;
-  }
-
-  .btn-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 20px rgba(0,212,255,0.3);
-  }
-
-  .btn-success {
-    background: linear-gradient(135deg, var(--accent2), #00bb66);
-    color: #080c10;
-  }
-
-  .btn-success:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 20px rgba(0,255,136,0.3);
-  }
-
-  .btn-danger {
-    background: linear-gradient(135deg, var(--danger), #cc0000);
-    color: #fff;
-  }
-
-  .btn-danger:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 20px rgba(255,68,68,0.3);
-  }
-
-  .btn:active { transform: translateY(0); }
-  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
-
-  /* ── RESPONSE BOX ── */
-  .response-box {
-    background: #060a0e;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px;
-    font-family: 'Space Mono', monospace;
-    font-size: 11px;
-    line-height: 1.7;
-    min-height: 80px;
-    white-space: pre-wrap;
-    word-break: break-all;
-    color: var(--muted);
-    transition: border-color 0.3s;
-    margin-top: 14px;
-  }
-
-  .response-box.success { border-color: rgba(0,255,136,0.3); color: var(--accent2); }
-  .response-box.error   { border-color: rgba(255,68,68,0.3);  color: var(--danger); }
-
-  /* ── LOG ── */
-  .log-container {
-    background: #060a0e;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px;
-    height: 200px;
-    overflow-y: auto;
-    font-family: 'Space Mono', monospace;
-    font-size: 11px;
-    line-height: 1.8;
-  }
-
-  .log-container::-webkit-scrollbar { width: 4px; }
-  .log-container::-webkit-scrollbar-track { background: transparent; }
-  .log-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-  .log-entry { display: flex; gap: 10px; }
-  .log-time  { color: var(--muted); flex-shrink: 0; }
-  .log-ok    { color: var(--accent2); }
-  .log-err   { color: var(--danger); }
-  .log-info  { color: var(--accent); }
-  .log-warn  { color: var(--warn); }
-
-  /* ── DETECTOR GRID ── */
-  .detector-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
-
-  .detector-item {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 14px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    transition: all 0.2s;
-  }
-
-  .detector-item.active {
-    border-color: var(--accent2);
-    background: rgba(0,255,136,0.05);
-  }
-
-  .detector-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--muted);
-    flex-shrink: 0;
-    transition: background 0.3s;
-  }
-
-  .detector-item.active .detector-dot {
-    background: var(--accent2);
-    box-shadow: 0 0 8px var(--accent2);
-  }
-
-  .detector-name { font-size: 12px; font-weight: 600; }
-  .detector-score {
-    margin-left: auto;
-    font-family: 'Space Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-  }
-
-  /* ── RISK METER ── */
-  .risk-bar-wrap {
-    margin-top: 16px;
-  }
-
-  .risk-label {
-    display: flex;
-    justify-content: space-between;
-    font-family: 'Space Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-    margin-bottom: 8px;
-  }
-
-  .risk-bar-bg {
-    height: 6px;
-    background: var(--surface2);
-    border-radius: 3px;
-    overflow: hidden;
-  }
-
-  .risk-bar-fill {
-    height: 100%;
-    border-radius: 3px;
-    width: 0%;
-    transition: width 0.6s ease, background 0.3s;
-    background: var(--accent2);
-  }
-
-  /* ── FULL WIDTH CARD ── */
-  .full-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 24px;
-    margin-bottom: 20px;
-  }
-
-  /* ── TOKEN DISPLAY ── */
-  .token-display {
-    background: #060a0e;
-    border: 1px solid rgba(0,212,255,0.2);
-    border-radius: 8px;
-    padding: 12px 16px;
-    font-family: 'Space Mono', monospace;
-    font-size: 11px;
-    color: var(--accent);
-    word-break: break-all;
-    line-height: 1.6;
-    cursor: pointer;
-    transition: border-color 0.2s;
-    position: relative;
-  }
-
-  .token-display:hover { border-color: var(--accent); }
-
-  .token-display::after {
-    content: 'CLICK TO COPY';
-    position: absolute;
-    top: 6px; right: 8px;
-    font-size: 9px;
-    color: var(--muted);
-    letter-spacing: 1px;
-  }
-
-  .copied-toast {
-    position: fixed;
-    bottom: 30px;
-    left: 50%;
-    transform: translateX(-50%) translateY(20px);
-    background: var(--accent2);
-    color: #080c10;
-    padding: 8px 20px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 700;
-    opacity: 0;
-    transition: all 0.3s;
-    pointer-events: none;
-    z-index: 999;
-  }
-
-  .copied-toast.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-
-  /* ── FOOTER ── */
-  footer {
-    text-align: center;
-    padding: 30px 0;
-    border-top: 1px solid var(--border);
-    font-family: 'Space Mono', monospace;
-    font-size: 11px;
-    color: var(--muted);
-  }
-
-  /* ── TABS ── */
-  .tabs {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 20px;
-    background: var(--surface2);
-    padding: 4px;
-    border-radius: 10px;
-  }
-
-  .tab {
-    flex: 1;
-    padding: 8px;
-    border: none;
-    background: none;
-    color: var(--muted);
-    font-family: 'Syne', sans-serif;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    border-radius: 7px;
-    transition: all 0.2s;
-  }
-
-  .tab.active {
-    background: var(--surface);
-    color: var(--text);
-    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-  }
-
-  .tab-panel { display: none; }
-  .tab-panel.active { display: block; }
-
-  @media (max-width: 768px) {
-    .stats-row { grid-template-columns: repeat(2, 1fr); }
-    .main-grid { grid-template-columns: 1fr; }
-    .detector-grid { grid-template-columns: 1fr; }
-  }
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+[data-theme="dark"]{--bg:#050508;--bg-2:#0c0c12;--bg-3:#13131c;--bg-4:#1a1a28;--border:rgba(255,255,255,0.06);--border-2:rgba(255,255,255,0.12);--text:#eeeef0;--text-2:#7878a0;--text-3:#404060;--accent:#6366f1;--accent-2:#818cf8;--green:#10b981;--green-2:#34d399;--red:#ef4444;--yellow:#f59e0b;--cyan:#06b6d4;--purple:#8b5cf6}
+[data-theme="light"]{--bg:#f8f8fc;--bg-2:#ffffff;--bg-3:#f0f0f8;--bg-4:#e8e8f4;--border:rgba(0,0,0,0.06);--border-2:rgba(0,0,0,0.12);--text:#0a0a14;--text-2:#505070;--text-3:#a0a0c0;--accent:#4f46e5;--accent-2:#6366f1;--green:#059669;--green-2:#10b981;--red:#dc2626;--yellow:#d97706;--cyan:#0891b2;--purple:#7c3aed}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;min-height:100vh;overflow-x:hidden;transition:background .4s,color .4s}
+.bg-canvas{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.bg-orb{position:absolute;border-radius:50%;filter:blur(80px);animation:orb-float 12s ease-in-out infinite}
+.orb-1{width:500px;height:500px;background:radial-gradient(circle,rgba(99,102,241,0.08) 0%,transparent 70%);top:-100px;right:-100px;animation-delay:0s}
+.orb-2{width:400px;height:400px;background:radial-gradient(circle,rgba(16,185,129,0.06) 0%,transparent 70%);bottom:-100px;left:-100px;animation-delay:-6s}
+.orb-3{width:300px;height:300px;background:radial-gradient(circle,rgba(6,182,212,0.05) 0%,transparent 70%);top:50%;left:50%;animation-delay:-3s}
+@keyframes orb-float{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(30px,-30px) scale(1.05)}66%{transform:translate(-20px,20px) scale(.95)}}
+.bg-grid{position:fixed;inset:0;pointer-events:none;z-index:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;mask-image:radial-gradient(ellipse 80% 80% at 50% 50%,black 20%,transparent 100%)}
+.shell{max-width:1140px;margin:0 auto;padding:0 28px 100px;position:relative;z-index:1}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 0;position:sticky;top:0;z-index:100;background:rgba(5,5,8,0.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);margin-bottom:56px;transition:background .4s}
+[data-theme="light"] .topbar{background:rgba(248,248,252,0.9)}
+.topbar-right{display:flex;align-items:center;gap:10px}
+
+/* STATUS CHIP - CLICKABLE */
+.status-chip{display:flex;align-items:center;gap:7px;padding:6px 14px;border-radius:999px;border:1px solid var(--border-2);font-size:12px;font-family:'Space Mono',monospace;background:var(--bg-2);color:var(--text-2);transition:all .3s;cursor:pointer;user-select:none}
+.status-chip:hover{transform:scale(1.03)}
+.status-chip.online{border-color:rgba(16,185,129,0.4);color:var(--green-2);background:rgba(16,185,129,0.06)}
+.status-chip.offline{border-color:rgba(239,68,68,0.4);color:var(--red);background:rgba(239,68,68,0.08);animation:offline-shake 0.5s ease}
+@keyframes offline-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+.pulse-ring{width:7px;height:7px;border-radius:50%;background:currentColor;position:relative;flex-shrink:0}
+.pulse-ring::after{content:'';position:absolute;inset:-3px;border-radius:50%;border:1px solid currentColor;animation:ring 2s ease-out infinite;opacity:0}
+@keyframes ring{0%{transform:scale(.8);opacity:.8}100%{transform:scale(2);opacity:0}}
+.icon-btn{width:36px;height:36px;border-radius:9px;border:1px solid var(--border-2);background:var(--bg-2);color:var(--text-2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .2s}
+.icon-btn:hover{color:var(--text);border-color:var(--accent)}
+
+/* OFFLINE MODAL */
+.offline-modal{display:none;position:fixed;inset:0;z-index:999;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px)}
+.offline-modal.show{display:flex;animation:modal-in .25s ease}
+@keyframes modal-in{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.offline-box{background:var(--bg-2);border:1px solid rgba(239,68,68,0.3);border-radius:20px;padding:32px;max-width:440px;width:90%;position:relative}
+.offline-box-top{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.offline-icon{width:40px;height:40px;border-radius:10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);display:flex;align-items:center;justify-content:center;font-size:18px}
+.offline-title{font-size:16px;font-weight:700;color:var(--red)}
+.offline-sub{font-size:12px;color:var(--text-3);margin-top:2px}
+.offline-checks{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
+.check-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:var(--bg-3);border:1px solid var(--border)}
+.check-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.check-dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.check-dot.fail{background:var(--red);box-shadow:0 0 6px var(--red);animation:fail-pulse 1s ease-in-out infinite}
+@keyframes fail-pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.check-dot.checking{background:var(--yellow);animation:fail-pulse .8s ease-in-out infinite}
+.check-label{font-size:12px;color:var(--text-2)}
+.check-status{margin-left:auto;font-size:11px;font-family:'Space Mono',monospace}
+.check-status.ok{color:var(--green)}
+.check-status.fail{color:var(--red)}
+.check-status.checking{color:var(--yellow)}
+.offline-hint{background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--text-2);line-height:1.6;margin-bottom:20px}
+.offline-hint code{font-family:'Space Mono',monospace;color:var(--accent-2);font-size:11px}
+.close-modal{width:100%;padding:10px;border:1px solid var(--border-2);border-radius:10px;background:var(--bg-3);color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .2s}
+.close-modal:hover{background:var(--bg-4)}
+
+/* HERO */
+.hero{text-align:center;margin-bottom:56px;animation:fade-up .8s ease both}
+@keyframes fade-up{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+.hero h1{font-size:clamp(36px,5vw,60px);font-weight:700;letter-spacing:-2.5px;line-height:1.05;margin-bottom:16px}
+.hero h1 .grad{background:linear-gradient(135deg,var(--accent-2),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero-sub{font-size:16px;color:var(--text-2);font-weight:300;max-width:480px;margin:0 auto;line-height:1.7}
+
+/* TICKER */
+.threat-ticker{background:var(--bg-2);border:1px solid var(--border);border-radius:16px;padding:14px 20px;margin-bottom:24px;display:flex;align-items:center;gap:16px;overflow:hidden;animation:fade-up .8s .1s ease both}
+.ticker-label{font-size:10px;font-family:'Space Mono',monospace;color:var(--text-3);letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap;flex-shrink:0}
+.ticker-track{flex:1;overflow:hidden}
+.ticker-inner{display:flex;gap:40px;animation:ticker-scroll 20s linear infinite;white-space:nowrap}
+@keyframes ticker-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.ticker-item{font-size:11px;font-family:'Space Mono',monospace;color:var(--text-3);flex-shrink:0}
+.ticker-item span{color:var(--accent-2)}
+
+/* STATS */
+.stat-ribbon{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;animation:fade-up .8s .15s ease both}
+.stat-card{background:var(--bg-2);border:1px solid var(--border);border-radius:16px;padding:22px 20px;position:relative;overflow:hidden;cursor:default;transition:transform .25s,border-color .25s,box-shadow .25s}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:0;transition:opacity .3s}
+.stat-card:hover{transform:translateY(-3px);border-color:var(--border-2);box-shadow:0 20px 40px rgba(0,0,0,0.2)}
+.stat-card:hover::before{opacity:1}
+.stat-label{font-size:10px;font-family:'Space Mono',monospace;color:var(--text-3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:12px}
+.stat-num{font-size:32px;font-weight:700;letter-spacing:-1.5px;color:var(--text);font-variant-numeric:tabular-nums;line-height:1;margin-bottom:6px}
+.stat-meta{font-size:11px;color:var(--text-3)}
+.stat-icon{position:absolute;top:18px;right:18px;font-size:20px;opacity:.15}
+
+/* GRID */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;animation:fade-up .8s .3s ease both}
+.panel{background:var(--bg-2);border:1px solid var(--border);border-radius:20px;padding:26px;transition:border-color .2s;position:relative;overflow:hidden}
+.panel::after{content:'';position:absolute;inset:0;border-radius:20px;background:radial-gradient(ellipse at top right,rgba(99,102,241,0.04),transparent 60%);pointer-events:none}
+.panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
+.panel-title{font-size:13px;font-weight:600;letter-spacing:-.3px}
+.panel-chip{font-size:10px;font-family:'Space Mono',monospace;padding:3px 9px;border-radius:5px;border:1px solid var(--border-2);color:var(--text-3);letter-spacing:.5px}
+
+/* TABS */
+.tab-bar{display:flex;gap:3px;background:var(--bg-3);padding:3px;border-radius:10px;margin-bottom:18px}
+.tab-btn{flex:1;padding:7px 10px;border:none;background:none;color:var(--text-3);font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:500;cursor:pointer;border-radius:8px;transition:all .15s}
+.tab-btn.active{background:var(--bg-2);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.tab-pane{display:none}.tab-pane.active{display:block}
+
+/* FORM */
+.f-group{margin-bottom:12px}
+.f-label{display:block;font-size:10px;font-family:'Space Mono',monospace;color:var(--text-3);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+.f-input{width:100%;background:var(--bg-3);border:1px solid var(--border);border-radius:10px;padding:10px 13px;color:var(--text);font-family:'Space Mono',monospace;font-size:12px;outline:none;transition:border-color .15s,box-shadow .15s}
+.f-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(99,102,241,0.1)}
+.f-input::placeholder{color:var(--text-3)}
+.act-btn{width:100%;padding:11px;border:none;border-radius:10px;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:-.3px}
+.act-btn:active{transform:scale(.98)}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--purple));color:white}
+.btn-primary:hover{box-shadow:0 8px 24px rgba(99,102,241,0.35)}
+.btn-success{background:linear-gradient(135deg,var(--green),#0d9488);color:white}
+.btn-success:hover{box-shadow:0 8px 24px rgba(16,185,129,0.35)}
+.btn-danger{background:linear-gradient(135deg,var(--red),#dc2626);color:white}
+.btn-danger:hover{box-shadow:0 8px 24px rgba(239,68,68,0.35)}
+.out-box{margin-top:12px;background:var(--bg-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-family:'Space Mono',monospace;font-size:11px;line-height:1.8;min-height:70px;color:var(--text-3);white-space:pre-wrap;word-break:break-all;transition:all .2s}
+.out-box.ok{border-color:rgba(16,185,129,0.4);color:var(--green-2);background:rgba(16,185,129,0.04)}
+.out-box.err{border-color:rgba(239,68,68,0.4);color:var(--red);background:rgba(239,68,68,0.04)}
+.tok-box{display:none;margin-top:10px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:10px 14px;font-family:'Space Mono',monospace;font-size:10px;color:var(--accent-2);word-break:break-all;cursor:pointer;position:relative;line-height:1.7;transition:border-color .15s}
+.tok-box:hover{border-color:var(--accent)}
+.tok-box::after{content:'copy';position:absolute;top:8px;right:10px;font-size:9px;color:var(--text-3);letter-spacing:1px}
+
+/* DETECTOR — ENHANCED */
+.det-grid{display:flex;flex-direction:column;gap:8px}
+.det-row{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-radius:10px;transition:all .3s;position:relative;overflow:hidden;border:1px solid var(--border);background:var(--bg-3)}
+
+/* Idle state */
+.det-row .det-glow{position:absolute;inset:0;border-radius:10px;opacity:0;transition:opacity .4s}
+.det-row .det-scan{position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.04),transparent);transition:none}
+
+/* FIRED states per detector type */
+.det-row.fired-red{border-color:rgba(239,68,68,0.5);background:rgba(239,68,68,0.06);animation:det-alarm 0.4s ease}
+.det-row.fired-red .det-glow{background:radial-gradient(ellipse at left,rgba(239,68,68,0.12),transparent 70%);opacity:1}
+.det-row.fired-red .det-scan{animation:scan-sweep 2s ease-in-out infinite;background:linear-gradient(90deg,transparent,rgba(239,68,68,0.12),transparent)}
+
+.det-row.fired-yellow{border-color:rgba(245,158,11,0.5);background:rgba(245,158,11,0.06);animation:det-alarm 0.4s ease}
+.det-row.fired-yellow .det-glow{background:radial-gradient(ellipse at left,rgba(245,158,11,0.12),transparent 70%);opacity:1}
+.det-row.fired-yellow .det-scan{animation:scan-sweep 2s ease-in-out infinite;background:linear-gradient(90deg,transparent,rgba(245,158,11,0.12),transparent)}
+
+.det-row.fired-purple{border-color:rgba(139,92,246,0.5);background:rgba(139,92,246,0.06);animation:det-alarm 0.4s ease}
+.det-row.fired-purple .det-glow{background:radial-gradient(ellipse at left,rgba(139,92,246,0.12),transparent 70%);opacity:1}
+.det-row.fired-purple .det-scan{animation:scan-sweep 2s ease-in-out infinite;background:linear-gradient(90deg,transparent,rgba(139,92,246,0.12),transparent)}
+
+.det-row.fired-cyan{border-color:rgba(6,182,212,0.5);background:rgba(6,182,212,0.06);animation:det-alarm 0.4s ease}
+.det-row.fired-cyan .det-glow{background:radial-gradient(ellipse at left,rgba(6,182,212,0.12),transparent 70%);opacity:1}
+.det-row.fired-cyan .det-scan{animation:scan-sweep 2s ease-in-out infinite;background:linear-gradient(90deg,transparent,rgba(6,182,212,0.12),transparent)}
+
+@keyframes scan-sweep{0%{left:-100%}100%{left:100%}}
+@keyframes det-alarm{0%{transform:scale(1)}30%{transform:scale(1.015)}60%{transform:scale(.995)}100%{transform:scale(1)}}
+
+.det-left{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+.det-dot{width:8px;height:8px;border-radius:50%;background:var(--border-2);transition:all .3s;flex-shrink:0;position:relative}
+.det-dot::after{content:'';position:absolute;inset:-4px;border-radius:50%;border:1.5px solid currentColor;opacity:0;transition:opacity .3s;animation:none}
+
+.det-row.fired-red .det-dot{background:var(--red);color:var(--red);box-shadow:0 0 10px var(--red)}
+.det-row.fired-red .det-dot::after{opacity:.6;animation:ring 1.5s ease-out infinite}
+.det-row.fired-yellow .det-dot{background:var(--yellow);color:var(--yellow);box-shadow:0 0 10px var(--yellow)}
+.det-row.fired-yellow .det-dot::after{opacity:.6;animation:ring 1.5s ease-out infinite}
+.det-row.fired-purple .det-dot{background:var(--purple);color:var(--purple);box-shadow:0 0 10px var(--purple)}
+.det-row.fired-purple .det-dot::after{opacity:.6;animation:ring 1.5s ease-out infinite}
+.det-row.fired-cyan .det-dot{background:var(--cyan);color:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+.det-row.fired-cyan .det-dot::after{opacity:.6;animation:ring 1.5s ease-out infinite}
+
+.det-name{font-size:12px;font-weight:500;position:relative;z-index:1}
+.det-desc{font-size:10px;color:var(--text-3);margin-top:1px;position:relative;z-index:1}
+.det-pts{font-family:'Space Mono',monospace;font-size:11px;color:var(--text-3);position:relative;z-index:1;transition:all .3s}
+.det-row.fired-red .det-pts{color:var(--red);font-weight:700}
+.det-row.fired-yellow .det-pts{color:var(--yellow);font-weight:700}
+.det-row.fired-purple .det-pts{color:var(--purple);font-weight:700}
+.det-row.fired-cyan .det-pts{color:var(--cyan);font-weight:700}
+
+/* ALERT BADGE */
+.det-badge{display:none;font-size:9px;font-family:'Space Mono',monospace;padding:2px 7px;border-radius:4px;font-weight:700;letter-spacing:.5px;position:relative;z-index:1}
+.det-row.fired-red .det-badge{display:inline-block;background:rgba(239,68,68,0.2);color:var(--red);border:1px solid rgba(239,68,68,0.4)}
+.det-row.fired-yellow .det-badge{display:inline-block;background:rgba(245,158,11,0.2);color:var(--yellow);border:1px solid rgba(245,158,11,0.4)}
+.det-row.fired-purple .det-badge{display:inline-block;background:rgba(139,92,246,0.2);color:var(--purple);border:1px solid rgba(139,92,246,0.4)}
+.det-row.fired-cyan .det-badge{display:inline-block;background:rgba(6,182,212,0.2);color:var(--cyan);border:1px solid rgba(6,182,212,0.4)}
+
+/* RISK */
+.risk-section{margin-top:18px}
+.risk-header{display:flex;justify-content:space-between;font-size:11px;font-family:'Space Mono',monospace;color:var(--text-3);margin-bottom:8px}
+.risk-track{height:5px;background:var(--bg-4);border-radius:3px;overflow:hidden}
+.risk-bar{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--green),var(--green-2));width:0%;transition:width .6s cubic-bezier(.25,.46,.45,.94),background .3s}
+.risk-footer{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.risk-lbl{font-size:11px;font-family:'Space Mono',monospace;color:var(--green);transition:color .3s;font-weight:700;letter-spacing:1px}
+
+/* TRIGGERS */
+.trigger-list{display:flex;flex-direction:column;gap:6px;margin-top:18px}
+.trigger-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:8px;background:var(--bg-3);border:1px solid var(--border);transition:all .2s}
+.trigger-item:hover{border-color:var(--border-2)}
+.t-name{font-size:12px;color:var(--text-2)}
+.t-tag{font-size:9px;font-family:'Space Mono',monospace;color:var(--text-3);letter-spacing:1px;padding:2px 7px;border-radius:4px;border:1px solid var(--border);background:var(--bg-4)}
+
+/* LOG */
+.log-panel{background:var(--bg-2);border:1px solid var(--border);border-radius:20px;padding:24px;margin-bottom:16px;animation:fade-up .8s .45s ease both}
+.log-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.log-stream{height:180px;overflow-y:auto;font-family:'Space Mono',monospace;font-size:11px;line-height:2}
+.log-stream::-webkit-scrollbar{width:3px}
+.log-stream::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:2px}
+.log-entry{display:flex;gap:14px}
+.log-time{color:var(--text-3);flex-shrink:0}
+.c-ok{color:var(--green-2)}.c-err{color:var(--red)}.c-inf{color:var(--cyan)}.c-wrn{color:var(--yellow)}
+.clr-btn{background:none;border:1px solid var(--border);color:var(--text-3);font-size:10px;font-family:'Space Mono',monospace;padding:4px 10px;border-radius:6px;cursor:pointer;transition:all .15s;letter-spacing:.5px}
+.clr-btn:hover{color:var(--text);border-color:var(--border-2)}
+
+/* METRICS */
+.metrics-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;animation:fade-up .8s .6s ease both}
+.metric-card{background:var(--bg-2);border:1px solid var(--border);border-radius:16px;padding:20px;transition:transform .2s,border-color .2s}
+.metric-card:hover{transform:translateY(-2px);border-color:var(--border-2)}
+.metric-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.metric-name{font-size:12px;font-weight:500;color:var(--text-2)}
+.metric-icon{font-size:18px;opacity:.6}
+.metric-val{font-size:24px;font-weight:700;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.metric-bar-wrap{margin-top:12px}
+.metric-bar-bg{height:3px;background:var(--bg-4);border-radius:2px}
+.metric-bar-fill{height:100%;border-radius:2px;transition:width 1s cubic-bezier(.25,.46,.45,.94)}
+
+/* TELEGRAM PANEL */
+.telegram-panel{background:var(--bg-2);border:1px solid var(--border);border-radius:20px;padding:24px;margin-bottom:16px;animation:fade-up .8s .35s ease both}
+.tg-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.tg-feed{display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto}
+.tg-feed::-webkit-scrollbar{width:3px}
+.tg-feed::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:2px}
+.tg-msg{background:var(--bg-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;animation:tg-slide-in .3s ease}
+@keyframes tg-slide-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.tg-msg.alert{border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.04)}
+.tg-msg-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.tg-icon{font-size:14px}
+.tg-label{font-size:11px;font-weight:600;color:var(--red)}
+.tg-time{margin-left:auto;font-size:10px;font-family:'Space Mono',monospace;color:var(--text-3)}
+.tg-body{font-size:11px;font-family:'Space Mono',monospace;color:var(--text-2);line-height:1.6}
+.tg-empty{font-size:12px;color:var(--text-3);font-family:'Space Mono',monospace;text-align:center;padding:20px}
+
+/* TOAST */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(12px);background:linear-gradient(135deg,var(--accent),var(--purple));color:white;padding:9px 20px;border-radius:999px;font-size:12px;font-weight:600;opacity:0;transition:all .25s;pointer-events:none;z-index:9999;letter-spacing:-.2px}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@keyframes count-up{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.counting{animation:count-up .25s ease}
+@media(max-width:768px){.stat-ribbon{grid-template-columns:repeat(2,1fr)}.grid-2{grid-template-columns:1fr}.metrics-row{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
+<div class="bg-canvas">
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+  <div class="bg-orb orb-3"></div>
+  <div class="bg-grid"></div>
+</div>
 
-<!-- HEADER -->
-<header>
-  <div class="container">
-    <div class="header-inner">
-      <div class="logo">
-        <div class="logo-icon">🛡️</div>
-        <div class="logo-text">ZERO<span>PERSISTENCE</span></div>
-      </div>
-      <div class="status-badge">
-        <div class="status-dot"></div>
-        SYSTEM ONLINE
-      </div>
-    </div>
-  </div>
-</header>
-
-<!-- HERO -->
-<div class="container">
-  <div class="hero">
-    <div class="hero-tag">Capstone</div>
-    <h1>
-      <span class="accent">Self-Destructing</span><br>
-      Token <span class="accent2">System</span>
-    </h1>
-    <p>API tokens that automatically invalidate within seconds of a credential leak.</p>
-  </div>
-
-  <!-- STATS -->
-  <div class="stats-row">
-    <div class="stat-card">
-      <div class="stat-label">Active Tokens</div>
-      <div class="stat-value" id="stat-tokens">0</div>
-      <div class="stat-sub">in Redis</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Requests</div>
-      <div class="stat-value" id="stat-requests">0</div>
-      <div class="stat-sub">this session</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Blocked</div>
-      <div class="stat-value" id="stat-blocked" style="color: var(--danger)">0</div>
-      <div class="stat-sub">attacks</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Uptime</div>
-      <div class="stat-value" id="stat-uptime" style="color: var(--accent2)">00:00</div>
-      <div class="stat-sub">hh:mm</div>
-    </div>
-  </div>
-
-  <!-- MAIN GRID -->
-  <div class="main-grid">
-
-    <!-- LEFT: Token Operations -->
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">
-          <div class="icon icon-blue">🔑</div>
-          Token Operations
-        </div>
-      </div>
-
-      <div class="tabs">
-        <button class="tab active" onclick="switchTab('issue')">Issue Token</button>
-        <button class="tab" onclick="switchTab('validate')">Validate</button>
-        <button class="tab" onclick="switchTab('revoke')">Revoke</button>
-      </div>
-
-      <!-- Issue Tab -->
-      <div class="tab-panel active" id="tab-issue">
-        <div class="form-group">
-          <label class="form-label">User ID</label>
-          <input class="form-input" id="issue-userid" placeholder="e.g. alice" value="alice">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Max Uses</label>
-          <input class="form-input" id="issue-maxuses" type="number" value="10">
-        </div>
-        <button class="btn btn-primary" onclick="issueToken()">Issue Token →</button>
-        <div id="issue-response" class="response-box">Waiting for request...</div>
-        <div id="token-display" class="token-display" style="display:none; margin-top:10px;" onclick="copyToken()"></div>
-      </div>
-
-      <!-- Validate Tab -->
-      <div class="tab-panel" id="tab-validate">
-        <div class="form-group">
-          <label class="form-label">Token (paste here)</label>
-          <textarea class="form-input" id="validate-token" placeholder="eyJ..." rows="4" style="resize:vertical; font-size:10px;"></textarea>
-        </div>
-        <button class="btn btn-success" onclick="validateToken()">Validate Token →</button>
-        <div id="validate-response" class="response-box">Waiting for request...</div>
-      </div>
-
-      <!-- Revoke Tab -->
-      <div class="tab-panel" id="tab-revoke">
-        <div class="form-group">
-          <label class="form-label">JTI (Token ID)</label>
-          <input class="form-input" id="revoke-jti" placeholder="paste jti here">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Admin Password</label>
-          <input class="form-input" id="revoke-pass" type="password" value="admin123">
-        </div>
-        <button class="btn btn-danger" onclick="revokeToken()">⚡ Revoke Token</button>
-        <div id="revoke-response" class="response-box">Waiting for request...</div>
+<!-- OFFLINE MODAL -->
+<div class="offline-modal" id="offline-modal" onclick="if(event.target===this)closeModal()">
+  <div class="offline-box">
+    <div class="offline-box-top">
+      <div class="offline-icon">⚠️</div>
+      <div>
+        <div class="offline-title">Server Offline</div>
+        <div class="offline-sub">Diagnostic check results</div>
       </div>
     </div>
-
-    <!-- RIGHT: Security Monitor -->
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">
-          <div class="icon icon-green">🛡️</div>
-          Security Monitor
-        </div>
-      </div>
-
-      <div style="font-family:'Space Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:12px;">Anomaly Detectors</div>
-
-      <div class="detector-grid" id="detectors">
-        <div class="detector-item" id="det-replay">
-          <div class="detector-dot"></div>
-          <div>
-            <div class="detector-name">Replay Attack</div>
-            <div style="font-size:10px; color:var(--muted);">jti reuse</div>
-          </div>
-          <div class="detector-score">+30</div>
-        </div>
-        <div class="detector-item" id="det-velocity">
-          <div class="detector-dot"></div>
-          <div>
-            <div class="detector-name">Velocity Burst</div>
-            <div style="font-size:10px; color:var(--muted);">10+ req/sec</div>
-          </div>
-          <div class="detector-score">+40</div>
-        </div>
-        <div class="detector-item" id="det-geo">
-          <div class="detector-dot"></div>
-          <div>
-            <div class="detector-name">Geo Impossible</div>
-            <div style="font-size:10px; color:var(--muted);">impossible travel</div>
-          </div>
-          <div class="detector-score">+50</div>
-        </div>
-        <div class="detector-item" id="det-enum">
-          <div class="detector-dot"></div>
-          <div>
-            <div class="detector-name">Endpoint Enum</div>
-            <div style="font-size:10px; color:var(--muted);">404 probing</div>
-          </div>
-          <div class="detector-score">+35</div>
-        </div>
-      </div>
-
-      <div class="risk-bar-wrap">
-        <div class="risk-label">
-          <span>RISK SCORE</span>
-          <span id="risk-value">0 / 100</span>
-        </div>
-        <div class="risk-bar-bg">
-          <div class="risk-bar-fill" id="risk-bar"></div>
-        </div>
-        <div style="font-family:'Space Mono',monospace; font-size:10px; margin-top:8px; text-align:right;">
-          Level: <span id="risk-level" style="color:var(--accent2)">LOW</span>
-        </div>
-      </div>
-
-      <!-- Self-Destruct Triggers -->
-      <div style="margin-top:20px; font-family:'Space Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:10px;">Self-Destruct Triggers</div>
-      <div style="display:flex; flex-direction:column; gap:6px;">
-        <div style="display:flex; justify-content:space-between; font-size:11px; padding:8px 12px; background:var(--surface2); border-radius:6px;">
-          <span>① TTL Expiry</span><span style="color:var(--accent); font-family:'Space Mono',monospace">Redis AUTO</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; font-size:11px; padding:8px 12px; background:var(--surface2); border-radius:6px;">
-          <span>② Context Drift</span><span style="color:var(--accent); font-family:'Space Mono',monospace">IP CHANGE</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; font-size:11px; padding:8px 12px; background:var(--surface2); border-radius:6px;">
-          <span>③ Max Uses</span><span style="color:var(--accent); font-family:'Space Mono',monospace">USE COUNT</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; font-size:11px; padding:8px 12px; background:var(--surface2); border-radius:6px;">
-          <span>④ High Risk</span><span style="color:var(--danger); font-family:'Space Mono',monospace">ANOMALY</span>
-        </div>
-        <div style="display:flex; justify-content:space-between; font-size:11px; padding:8px 12px; background:var(--surface2); border-radius:6px;">
-          <span>⑤ Admin Revoke</span><span style="color:var(--warn); font-family:'Space Mono',monospace">MANUAL</span>
-        </div>
-      </div>
+    <div class="offline-checks" id="offline-checks">
+      <div class="check-row"><div class="check-dot checking" id="chk-dot-server"></div><div class="check-label">FastAPI Server</div><div class="check-status checking" id="chk-server">Checking…</div></div>
+      <div class="check-row"><div class="check-dot checking" id="chk-dot-redis"></div><div class="check-label">Redis Connection</div><div class="check-status checking" id="chk-redis">Checking…</div></div>
+      <div class="check-row"><div class="check-dot checking" id="chk-dot-sched"></div><div class="check-label">Scheduler</div><div class="check-status checking" id="chk-sched">Checking…</div></div>
     </div>
-  </div>
-
-  <!-- EVENT LOG -->
-  <div class="full-card">
-    <div class="card-header">
-      <div class="card-title">
-        <div class="icon icon-yellow">📋</div>
-        Live Event Log
-      </div>
-      <button onclick="clearLog()" style="background:none; border:1px solid var(--border); color:var(--muted); padding:4px 12px; border-radius:6px; font-size:11px; cursor:pointer; font-family:'Space Mono',monospace;">CLEAR</button>
+    <div class="offline-hint" id="offline-hint">
+      Run these commands to fix:<br><br>
+      <code>docker start my-redis</code><br>
+      <code>py -m uvicorn main:app --reload</code>
     </div>
-    <div class="log-container" id="log">
-      <div class="log-entry">
-        <span class="log-time">--:--:--</span>
-        <span class="log-info">System initialized. Ready.</span>
-      </div>
-    </div>
+    <button class="close-modal" onclick="closeModal()">Close</button>
   </div>
 </div>
 
-<footer>
-  <div class="container">
-    ZERO-PERSISTENCE TOKEN SYSTEM — CAPSTONE PROJECT &nbsp;|&nbsp; CYBERSECURITY ENGINEERING
+<div class="shell">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div style="width:36px"></div>
+    <div class="topbar-right">
+      <div class="status-chip" id="status-chip" onclick="onStatusClick()"><div class="pulse-ring"></div><span id="status-txt">Connecting…</span></div>
+      <button class="icon-btn" id="theme-btn">◐</button>
+    </div>
   </div>
-</footer>
 
-<div class="copied-toast" id="toast">✓ Copied to clipboard</div>
+  <!-- HERO -->
+  <div class="hero">
+    <h1><span class="grad">Self-Destructing</span><br>Token System</h1>
+    <p class="hero-sub">API credentials that automatically invalidate within seconds of a leak — powered by zero-persistence architecture.</p>
+  </div>
+
+  <!-- TICKER -->
+  <div class="threat-ticker">
+    <div class="ticker-label">Live Feed</div>
+    <div class="ticker-track"><div class="ticker-inner">
+      <span class="ticker-item">System <span>ONLINE</span></span>
+      <span class="ticker-item">Redis <span>CONNECTED</span></span>
+      <span class="ticker-item">Zero-Persistence <span>ACTIVE</span></span>
+      <span class="ticker-item">Scheduler <span>RUNNING</span></span>
+      <span class="ticker-item">4 Detectors <span>ARMED</span></span>
+      <span class="ticker-item">5 Destruct Triggers <span>READY</span></span>
+      <span class="ticker-item">Telegram Alerts <span>ENABLED</span></span>
+      <span class="ticker-item">System <span>ONLINE</span></span>
+      <span class="ticker-item">Redis <span>CONNECTED</span></span>
+      <span class="ticker-item">Zero-Persistence <span>ACTIVE</span></span>
+      <span class="ticker-item">Scheduler <span>RUNNING</span></span>
+      <span class="ticker-item">4 Detectors <span>ARMED</span></span>
+      <span class="ticker-item">5 Destruct Triggers <span>READY</span></span>
+      <span class="ticker-item">Telegram Alerts <span>ENABLED</span></span>
+    </div></div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stat-ribbon">
+    <div class="stat-card"><div class="stat-icon">🔑</div><div class="stat-label">Active Tokens</div><div class="stat-num" id="s-tokens">—</div><div class="stat-meta">in Redis memory</div></div>
+    <div class="stat-card"><div class="stat-icon">📡</div><div class="stat-label">Requests</div><div class="stat-num" id="s-req">0</div><div class="stat-meta">this session</div></div>
+    <div class="stat-card"><div class="stat-icon">🛡️</div><div class="stat-label">Blocked</div><div class="stat-num" id="s-blocked" style="color:var(--red)">0</div><div class="stat-meta">attacks stopped</div></div>
+    <div class="stat-card"><div class="stat-icon">⏱️</div><div class="stat-label">Uptime</div><div class="stat-num" id="s-uptime" style="color:var(--green)">00:00</div><div class="stat-meta">hh : mm</div></div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="grid-2">
+    <!-- Token Ops -->
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Token Operations</div><div class="panel-chip">REST API</div></div>
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('issue')">Issue</button>
+        <button class="tab-btn" onclick="switchTab('validate')">Validate</button>
+        <button class="tab-btn" onclick="switchTab('revoke')">Revoke</button>
+      </div>
+      <div class="tab-pane active" id="tp-issue">
+        <div class="f-group"><label class="f-label">User ID</label><input class="f-input" id="uid" value="alice" placeholder="identifier"></div>
+        <div class="f-group"><label class="f-label">Max Uses</label><input class="f-input" id="uses" type="number" value="10"></div>
+        <button class="act-btn btn-primary" onclick="issueToken()">Issue Token →</button>
+        <div class="out-box" id="out-issue">Waiting for request…</div>
+        <div class="tok-box" id="tok-box" onclick="copyTok()"></div>
+      </div>
+      <div class="tab-pane" id="tp-validate">
+        <div class="f-group"><label class="f-label">Token</label><textarea class="f-input" id="val-tok" rows="4" placeholder="eyJ…" style="resize:vertical;font-size:10px;"></textarea></div>
+        <button class="act-btn btn-success" onclick="validateToken()">Validate Token →</button>
+        <div class="out-box" id="out-validate">Waiting for request…</div>
+      </div>
+      <div class="tab-pane" id="tp-revoke">
+        <div class="f-group"><label class="f-label">JTI</label><input class="f-input" id="rev-jti" placeholder="token id"></div>
+        <div class="f-group"><label class="f-label">Admin Password</label><input class="f-input" id="rev-pass" type="password" value="admin123"></div>
+        <button class="act-btn btn-danger" onclick="revokeToken()">⚡ Revoke Token</button>
+        <div class="out-box" id="out-revoke">Waiting for request…</div>
+      </div>
+    </div>
+
+    <!-- Security Monitor -->
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">Security Monitor</div><div class="panel-chip">LIVE</div></div>
+      <div class="det-grid">
+        <div class="det-row" id="d-replay">
+          <div class="det-glow"></div><div class="det-scan"></div>
+          <div class="det-left"><div class="det-dot"></div><div><div class="det-name">Replay Attack</div><div class="det-desc">jti reuse detection</div></div></div>
+          <div style="display:flex;align-items:center;gap:8px"><div class="det-badge">DETECTED</div><div class="det-pts">+30</div></div>
+        </div>
+        <div class="det-row" id="d-velocity">
+          <div class="det-glow"></div><div class="det-scan"></div>
+          <div class="det-left"><div class="det-dot"></div><div><div class="det-name">Velocity Burst</div><div class="det-desc">10+ requests / second</div></div></div>
+          <div style="display:flex;align-items:center;gap:8px"><div class="det-badge">DETECTED</div><div class="det-pts">+40</div></div>
+        </div>
+        <div class="det-row" id="d-geo">
+          <div class="det-glow"></div><div class="det-scan"></div>
+          <div class="det-left"><div class="det-dot"></div><div><div class="det-name">Geo Impossible</div><div class="det-desc">physically impossible travel</div></div></div>
+          <div style="display:flex;align-items:center;gap:8px"><div class="det-badge">DETECTED</div><div class="det-pts">+50</div></div>
+        </div>
+        <div class="det-row" id="d-enum">
+          <div class="det-glow"></div><div class="det-scan"></div>
+          <div class="det-left"><div class="det-dot"></div><div><div class="det-name">Endpoint Enum</div><div class="det-desc">404 path probing</div></div></div>
+          <div style="display:flex;align-items:center;gap:8px"><div class="det-badge">DETECTED</div><div class="det-pts">+35</div></div>
+        </div>
+      </div>
+      <div class="risk-section">
+        <div class="risk-header"><span>Risk Score</span><span id="risk-val">0 / 100</span></div>
+        <div class="risk-track"><div class="risk-bar" id="risk-bar"></div></div>
+        <div class="risk-footer"><span style="font-size:10px;color:var(--text-3);font-family:'Space Mono',monospace">LOW · MEDIUM · HIGH</span><div class="risk-lbl" id="risk-lbl">LOW</div></div>
+      </div>
+      <div class="trigger-list">
+        <div class="trigger-item"><span class="t-name">① TTL Expiry</span><span class="t-tag">REDIS AUTO</span></div>
+        <div class="trigger-item"><span class="t-name">② Context Drift</span><span class="t-tag">IP CHANGE</span></div>
+        <div class="trigger-item"><span class="t-name">③ Max Uses</span><span class="t-tag">USE COUNT</span></div>
+        <div class="trigger-item"><span class="t-name">④ High Risk</span><span class="t-tag" style="color:var(--red);border-color:rgba(239,68,68,0.3)">ANOMALY</span></div>
+        <div class="trigger-item"><span class="t-name">⑤ Admin Revoke</span><span class="t-tag" style="color:var(--yellow);border-color:rgba(245,158,11,0.3)">MANUAL</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TELEGRAM FEED -->
+  <div class="telegram-panel">
+    <div class="tg-head">
+      <div class="panel-title"> Telegram Alert Feed</div>
+      <div class="panel-chip">AUTO</div>
+    </div>
+    <div class="tg-feed" id="tg-feed">
+      <div class="tg-empty" id="tg-empty">No alerts yet — system is clean ✓</div>
+    </div>
+  </div>
+
+  <!-- LOG -->
+  <div class="log-panel">
+    <div class="log-head"><div class="panel-title">Event Log</div><button class="clr-btn" onclick="clearLog()">CLEAR</button></div>
+    <div class="log-stream" id="log"><div class="log-entry"><span class="log-time">--:--:--</span><span class="c-inf">System initialized · Ready</span></div></div>
+  </div>
+
+  <!-- METRICS -->
+  <div class="metrics-row">
+    <div class="metric-card"><div class="metric-top"><div class="metric-name">Test Coverage</div><div class="metric-icon">✅</div></div><div class="metric-val" style="color:var(--green)">81%</div><div class="metric-bar-wrap"><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:81%;background:linear-gradient(90deg,var(--green),var(--green-2))"></div></div></div><div style="font-size:11px;color:var(--text-3);margin-top:8px;font-family:'Space Mono',monospace">41/41 tests passed</div></div>
+    <div class="metric-card"><div class="metric-top"><div class="metric-name">Security Score</div><div class="metric-icon">🛡️</div></div><div class="metric-val" style="color:var(--cyan)">A+</div><div class="metric-bar-wrap"><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:92%;background:linear-gradient(90deg,var(--cyan),var(--accent))"></div></div></div><div style="font-size:11px;color:var(--text-3);margin-top:8px;font-family:'Space Mono',monospace">OWASP ZAP — 0 critical</div></div>
+    <div class="metric-card"><div class="metric-top"><div class="metric-name">Architecture</div><div class="metric-icon">⚡</div></div><div class="metric-val" style="color:var(--purple)">5L</div><div class="metric-bar-wrap"><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:100%;background:linear-gradient(90deg,var(--purple),var(--accent-2))"></div></div></div><div style="font-size:11px;color:var(--text-3);margin-top:8px;font-family:'Space Mono',monospace">5-layer · 6-step validation</div></div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Copied to clipboard</div>
 
 <script>
-  const API = 'http://localhost:8000';
-  let requestCount = 0;
-  let blockedCount = 0;
-  let lastToken = '';
-  let lastJti = '';
-  let startTime = Date.now();
+const API='http://localhost:8000';
+let reqCount=0,blocked=0,lastToken='',startTime=Date.now();
+let lastStatus='unknown';
 
-  // ── UPTIME ──
-  setInterval(() => {
-    const elapsed = Math.floor((Date.now() - startTime) / 1000);
-    const h = String(Math.floor(elapsed / 3600)).padStart(2,'0');
-    const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2,'0');
-    document.getElementById('stat-uptime').textContent = `${h}:${m}`;
-  }, 1000);
+// THEME
+const html=document.documentElement;
+html.setAttribute('data-theme',localStorage.getItem('zp-theme')||'dark');
+document.getElementById('theme-btn').addEventListener('click',()=>{
+  const next=html.getAttribute('data-theme')==='dark'?'light':'dark';
+  html.setAttribute('data-theme',next);localStorage.setItem('zp-theme',next);
+});
 
-  // ── HEALTH POLL ──
-  async function pollHealth() {
-    try {
-      const r = await fetch(`${API}/health`);
-      const d = await r.json();
-      document.querySelector('.status-badge').innerHTML =
-        `<div class="status-dot"></div>${d.status === 'ok' ? 'SYSTEM ONLINE' : 'DEGRADED'}`;
-    } catch(e) {
-      document.querySelector('.status-badge').innerHTML =
-        `<div class="status-dot" style="background:var(--danger)"></div>OFFLINE`;
-    }
+// UPTIME
+setInterval(()=>{
+  const s=Math.floor((Date.now()-startTime)/1000);
+  document.getElementById('s-uptime').textContent=String(Math.floor(s/3600)).padStart(2,'0')+':'+String(Math.floor((s%3600)/60)).padStart(2,'0');
+},1000);
+
+// HEALTH POLL
+async function health(){
+  const chip=document.getElementById('status-chip');
+  const txt=document.getElementById('status-txt');
+  try{
+    const r=await fetch(`${API}/health`,{signal:AbortSignal.timeout(4000)});
+    const d=await r.json();
+    const ok=d.status==='ok';
+    chip.className=`status-chip ${ok?'online':'offline'}`;
+    txt.textContent=ok?'System Online':'Degraded';
+    lastStatus=ok?'online':'degraded';
+    window._healthData=d;
+  }catch(e){
+    chip.className='status-chip offline';
+    txt.textContent='Offline — Click to diagnose';
+    lastStatus='offline';
+    window._healthData=null;
   }
-  pollHealth();
-  setInterval(pollHealth, 10000);
+}
+health();setInterval(health,8000);
 
-  // ── TABS ──
-  function switchTab(name) {
-    document.querySelectorAll('.tab').forEach((t,i) => {
-      t.classList.toggle('active', ['issue','validate','revoke'][i] === name);
-    });
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    document.getElementById(`tab-${name}`).classList.add('active');
-  }
+// OFFLINE MODAL
+function onStatusClick(){
+  if(lastStatus==='online')return;
+  document.getElementById('offline-modal').classList.add('show');
+  runDiagnostics();
+}
 
-  // ── LOG ──
-  function addLog(msg, type='info') {
-    const log = document.getElementById('log');
-    const now = new Date().toTimeString().slice(0,8);
-    const div = document.createElement('div');
-    div.className = 'log-entry';
-    div.innerHTML = `<span class="log-time">${now}</span><span class="log-${type}">${msg}</span>`;
-    log.appendChild(div);
-    log.scrollTop = log.scrollHeight;
-  }
+function closeModal(){
+  document.getElementById('offline-modal').classList.remove('show');
+}
 
-  function clearLog() {
-    document.getElementById('log').innerHTML = '';
-    addLog('Log cleared.', 'info');
-  }
+async function runDiagnostics(){
+  // Reset
+  ['server','redis','sched'].forEach(k=>{
+    document.getElementById(`chk-dot-${k}`).className='check-dot checking';
+    document.getElementById(`chk-${k}`).className='check-status checking';
+    document.getElementById(`chk-${k}`).textContent='Checking…';
+  });
 
-  // ── ISSUE TOKEN ──
-  async function issueToken() {
-    const userId = document.getElementById('issue-userid').value.trim() || 'user';
-    const maxUses = parseInt(document.getElementById('issue-maxuses').value) || 10;
-    const box = document.getElementById('issue-response');
-    const tokenDiv = document.getElementById('token-display');
+  // Try server
+  try{
+    const r=await fetch(`${API}/health`,{signal:AbortSignal.timeout(3000)});
+    const d=await r.json();
+    setCheck('server','ok','Running ✓');
+    setCheck('redis',d.redis==='connected'?'ok':'fail',d.redis==='connected'?'Connected ✓':'Not connected ✗');
+    setCheck('sched',d.scheduler==='running'?'ok':'fail',d.scheduler==='running'?'Running ✓':'Stopped ✗');
 
-    box.className = 'response-box';
-    box.textContent = 'Requesting...';
-    tokenDiv.style.display = 'none';
-
-    try {
-      const r = await fetch(`${API}/request-token`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({user_id: userId, max_uses: maxUses})
-      });
-      const d = await r.json();
-      requestCount++;
-      document.getElementById('stat-requests').textContent = requestCount;
-
-      if (r.ok) {
-        lastToken = d.token;
-        lastJti = d.jti;
-        document.getElementById('stat-tokens').textContent =
-          parseInt(document.getElementById('stat-tokens').textContent || 0) + 1;
-
-        box.className = 'response-box success';
-        box.textContent = `✓ Token issued\nJTI: ${d.jti}\nExpires in: ${d.expires_in}s\nMax uses: ${maxUses}`;
-        tokenDiv.style.display = 'block';
-        tokenDiv.textContent = d.token;
-
-        addLog(`Token issued for "${userId}" — JTI: ${d.jti.slice(0,8)}...`, 'ok');
-
-        // Auto-fill validate tab
-        document.getElementById('validate-token').value = d.token;
-        document.getElementById('revoke-jti').value = d.jti;
-      } else {
-        box.className = 'response-box error';
-        box.textContent = `✗ Error: ${JSON.stringify(d, null, 2)}`;
-        addLog(`Issue failed: ${r.status}`, 'err');
-      }
-    } catch(e) {
-      box.className = 'response-box error';
-      box.textContent = `✗ Cannot connect to server.\nMake sure uvicorn is running.`;
-      addLog('Connection error — is the server running?', 'err');
-    }
-  }
-
-  // ── VALIDATE TOKEN ──
-  async function validateToken() {
-    const token = document.getElementById('validate-token').value.trim();
-    const box = document.getElementById('validate-response');
-
-    if (!token) { box.textContent = 'Paste a token first.'; return; }
-
-    box.className = 'response-box';
-    box.textContent = 'Validating...';
-
-    try {
-      const r = await fetch(`${API}/validate`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({token})
-      });
-      const d = await r.json();
-      requestCount++;
-      document.getElementById('stat-requests').textContent = requestCount;
-
-      if (r.ok) {
-        box.className = 'response-box success';
-        box.textContent = `✓ Token VALID\nUses left: ${d.uses_left}\nRisk: ${d.risk?.level || 'LOW'} (${d.risk?.score || 0})`;
-        addLog(`Token validated — uses left: ${d.uses_left}`, 'ok');
-        updateRisk(d.risk?.score || 0, d.risk?.level || 'LOW');
-      } else {
-        blockedCount++;
-        document.getElementById('stat-blocked').textContent = blockedCount;
-        box.className = 'response-box error';
-        box.textContent = `✗ Token INVALID\n${JSON.stringify(d.detail || d, null, 2)}`;
-        addLog(`Validation failed: ${JSON.stringify(d.detail?.reason || 'rejected')}`, 'err');
-      }
-    } catch(e) {
-      box.className = 'response-box error';
-      box.textContent = '✗ Connection error.';
-      addLog('Connection error', 'err');
-    }
-  }
-
-  // ── REVOKE TOKEN ──
-  async function revokeToken() {
-    const jti = document.getElementById('revoke-jti').value.trim();
-    const pass = document.getElementById('revoke-pass').value;
-    const box = document.getElementById('revoke-response');
-
-    if (!jti) { box.textContent = 'Enter a JTI first.'; return; }
-
-    box.className = 'response-box';
-    box.textContent = 'Revoking...';
-
-    try {
-      const r = await fetch(`${API}/admin/revoke/${jti}`, {
-        method: 'DELETE',
-        headers: {'Authorization': 'Basic ' + btoa(`admin:${pass}`)}
-      });
-      const d = await r.json();
-
-      if (r.ok) {
-        box.className = 'response-box success';
-        box.textContent = `✓ Token revoked\n${d.message}`;
-        addLog(`Admin revoked JTI: ${jti.slice(0,8)}...`, 'warn');
-        document.getElementById('stat-tokens').textContent =
-          Math.max(0, parseInt(document.getElementById('stat-tokens').textContent || 1) - 1);
-      } else {
-        box.className = 'response-box error';
-        box.textContent = `✗ ${JSON.stringify(d, null, 2)}`;
-        addLog(`Revoke failed: ${r.status}`, 'err');
-      }
-    } catch(e) {
-      box.className = 'response-box error';
-      box.textContent = '✗ Connection error.';
-    }
-  }
-
-  // ── RISK METER ──
-  function updateRisk(score, level) {
-    const bar = document.getElementById('risk-bar');
-    const val = document.getElementById('risk-value');
-    const lbl = document.getElementById('risk-level');
-    const pct = Math.min(score, 100);
-
-    bar.style.width = pct + '%';
-    val.textContent = `${score} / 100`;
-    lbl.textContent = level;
-
-    if (level === 'HIGH') {
-      bar.style.background = 'var(--danger)';
-      lbl.style.color = 'var(--danger)';
-      ['det-replay','det-velocity','det-geo','det-enum'].forEach(id =>
-        document.getElementById(id).classList.add('active'));
-    } else if (level === 'MEDIUM') {
-      bar.style.background = 'var(--warn)';
-      lbl.style.color = 'var(--warn)';
+    const hint=document.getElementById('offline-hint');
+    if(d.redis!=='connected'){
+      hint.innerHTML='Redis is not running. Fix:<br><br><code>docker start my-redis</code><br><br>or:<br><br><code>docker run -d --name my-redis -p 6379:6379 redis:alpine</code>';
+    } else if(d.scheduler!=='running'){
+      hint.innerHTML='Scheduler stopped. Restart server:<br><br><code>py -m uvicorn main:app --reload</code>';
     } else {
-      bar.style.background = 'var(--accent2)';
-      lbl.style.color = 'var(--accent2)';
+      hint.innerHTML='Server is running but degraded. Check terminal for errors.';
     }
+  }catch{
+    setCheck('server','fail','Not reachable ✗');
+    setCheck('redis','fail','Unknown ✗');
+    setCheck('sched','fail','Unknown ✗');
+    document.getElementById('offline-hint').innerHTML=
+      'Server is not running. Start it:<br><br>'+
+      '<code>docker start my-redis</code><br>'+
+      '<code>py -m uvicorn main:app --reload</code>';
   }
+}
 
-  // ── COPY TOKEN ──
-  function copyToken() {
-    if (!lastToken) return;
-    navigator.clipboard.writeText(lastToken);
-    const toast = document.getElementById('toast');
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 2000);
+function setCheck(key,status,text){
+  document.getElementById(`chk-dot-${key}`).className=`check-dot ${status}`;
+  document.getElementById(`chk-${key}`).className=`check-status ${status}`;
+  document.getElementById(`chk-${key}`).textContent=text;
+}
+
+// TABS
+function switchTab(name){
+  const names=['issue','validate','revoke'];
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',names[i]===name));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById(`tp-${name}`).classList.add('active');
+}
+
+// LOG
+function log(msg,type='inf'){
+  const el=document.getElementById('log');
+  const t=new Date().toTimeString().slice(0,8);
+  const row=document.createElement('div');
+  row.className='log-entry';
+  row.innerHTML=`<span class="log-time">${t}</span><span class="c-${type}">${msg}</span>`;
+  el.appendChild(row);el.scrollTop=el.scrollHeight;
+}
+function clearLog(){document.getElementById('log').innerHTML='';log('Log cleared');}
+
+// TELEGRAM FEED
+function addTelegramAlert(event,ip,score,reasons){
+  const feed=document.getElementById('tg-feed');
+  const empty=document.getElementById('tg-empty');
+  if(empty)empty.remove();
+  const t=new Date().toTimeString().slice(0,8);
+  const div=document.createElement('div');
+  div.className='tg-msg alert';
+  div.innerHTML=`
+    <div class="tg-msg-top">
+      <span class="tg-icon">🚨</span>
+      <span class="tg-label">SECURITY ALERT</span>
+      <span class="tg-time">${t}</span>
+    </div>
+    <div class="tg-body">Event: ${event}\nIP: ${ip}\nRisk Score: ${score} (HIGH)\nReasons: ${reasons.join(', ')}\nAction: Token destroyed</div>`;
+  feed.insertBefore(div,feed.firstChild);
+}
+
+// ISSUE
+async function issueToken(){
+  const uid=document.getElementById('uid').value.trim()||'user';
+  const uses=parseInt(document.getElementById('uses').value)||10;
+  const out=document.getElementById('out-issue');
+  const box=document.getElementById('tok-box');
+  out.className='out-box';out.textContent='Issuing…';box.style.display='none';
+  try{
+    const r=await fetch(`${API}/request-token`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,max_uses:uses})});
+    const d=await r.json();
+    reqCount++;animate('s-req',reqCount);
+    if(r.ok){
+      lastToken=d.token;
+      out.className='out-box ok';
+      out.textContent=`✓ Token issued\nJTI: ${d.jti}\nExpires: ${d.expires_in}s · Max uses: ${uses}`;
+      box.style.display='block';box.textContent=d.token;
+      document.getElementById('val-tok').value=d.token;
+      document.getElementById('rev-jti').value=d.jti;
+      log(`Token issued — ${uid} — ${d.jti.slice(0,8)}…`,'ok');
+    }else{out.className='out-box err';out.textContent=`✗ ${JSON.stringify(d,null,2)}`;log('Issue failed','err');}
+  }catch{out.className='out-box err';out.textContent='✗ Cannot connect to server';log('Connection error','err');}
+}
+
+// VALIDATE
+async function validateToken(){
+  const token=document.getElementById('val-tok').value.trim();
+  const out=document.getElementById('out-validate');
+  if(!token){out.textContent='Paste a token first';return;}
+  out.className='out-box';out.textContent='Validating…';
+  try{
+    const r=await fetch(`${API}/validate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
+    const d=await r.json();
+    reqCount++;animate('s-req',reqCount);
+    if(r.ok){
+      out.className='out-box ok';
+      out.textContent=`✓ Token VALID\nUses left: ${d.uses_left}\nRisk: ${d.risk?.level||'LOW'} (${d.risk?.score||0})`;
+      updateRisk(d.risk?.score||0,d.risk?.level||'LOW',d.risk?.reasons||[]);
+      log(`Validated · uses left: ${d.uses_left}`,'ok');
+    }else{
+      blocked++;animate('s-blocked',blocked);
+      out.className='out-box err';
+      const detail=d.detail||d;
+      out.textContent=`✗ Token INVALID\n${JSON.stringify(detail,null,2)}`;
+      // Check if high risk and show telegram feed
+      if(detail?.reason==='high_risk_detected'&&detail?.risk){
+        const risk=detail.risk;
+        updateRisk(risk.score,risk.level,risk.reasons||[]);
+        addTelegramAlert('Anomaly HIGH Risk','127.0.0.1',risk.score,risk.reasons||[]);
+      }
+      log('Validation rejected','err');
+    }
+  }catch{out.className='out-box err';out.textContent='✗ Connection error';}
+}
+
+// REVOKE
+async function revokeToken(){
+  const jti=document.getElementById('rev-jti').value.trim();
+  const pass=document.getElementById('rev-pass').value;
+  const out=document.getElementById('out-revoke');
+  if(!jti){out.textContent='Enter a JTI first';return;}
+  out.className='out-box';out.textContent='Revoking…';
+  try{
+    const r=await fetch(`${API}/admin/revoke/${jti}`,{method:'DELETE',headers:{'Authorization':'Basic '+btoa(`admin:${pass}`)}});
+    const d=await r.json();
+    if(r.ok){out.className='out-box ok';out.textContent=`✓ Revoked\n${d.message}`;log(`Admin revoked · ${jti.slice(0,8)}…`,'wrn');}
+    else{out.className='out-box err';out.textContent=`✗ ${JSON.stringify(d,null,2)}`;}
+  }catch{out.className='out-box err';out.textContent='✗ Connection error';}
+}
+
+// RISK + DETECTOR SIGNALS
+const DET_COLORS={
+  replay_attack:{id:'d-replay',cls:'fired-red'},
+  velocity_burst:{id:'d-velocity',cls:'fired-yellow'},
+  geo_impossibility:{id:'d-geo',cls:'fired-purple'},
+  endpoint_enumeration:{id:'d-enum',cls:'fired-cyan'}
+};
+
+function updateRisk(score,level,reasons){
+  const bar=document.getElementById('risk-bar');
+  const val=document.getElementById('risk-val');
+  const lbl=document.getElementById('risk-lbl');
+  bar.style.width=Math.min(score,100)+'%';
+  val.textContent=`${score} / 100`;
+  lbl.textContent=level;
+  const map={LOW:'var(--green)',MEDIUM:'var(--yellow)',HIGH:'var(--red)'};
+  bar.style.background=map[level]||'var(--green)';
+  lbl.style.color=map[level]||'var(--green)';
+
+  // Reset all detectors first
+  Object.values(DET_COLORS).forEach(({id,cls})=>{
+    document.getElementById(id).classList.remove('fired-red','fired-yellow','fired-purple','fired-cyan');
+  });
+
+  // Fire detectors based on reasons
+  reasons.forEach(reason=>{
+    const key=reason.toLowerCase().replace(/ /g,'_');
+    if(DET_COLORS[key]){
+      const el=document.getElementById(DET_COLORS[key].id);
+      el.classList.add(DET_COLORS[key].cls);
+    }
+  });
+
+  // If HIGH — fire all
+  if(level==='HIGH'&&reasons.length===0){
+    Object.values(DET_COLORS).forEach(({id,cls})=>document.getElementById(id).classList.add(cls));
   }
+}
+
+function animate(id,val){
+  const el=document.getElementById(id);
+  el.classList.remove('counting');void el.offsetWidth;
+  el.textContent=val;el.classList.add('counting');
+}
+
+// ── SSE REAL-TIME CONNECTION ──────────────────────────────────────────
+function connectSSE() {
+  const es = new EventSource(`${API}/events`);
+
+  es.onmessage = function(e) {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'connected') {
+        log('Dashboard connected to server · real-time active', 'inf');
+      } else if (msg.type === 'log') {
+        log(msg.data.msg, msg.data.level || 'inf');
+      } else if (msg.type === 'telegram_alert') {
+        const d = msg.data;
+        addTelegramAlert(d.event, d.ip, d.score, d.reasons);
+        log(`🚨 HIGH RISK — ${d.reasons.join(', ')} — score: ${d.score}`, 'err');
+      } else if (msg.type === 'detector_fired') {
+        const d = msg.data;
+        updateRisk(d.score, d.level, d.reasons);
+      }
+    } catch(err) {}
+  };
+
+  es.onerror = function() {
+    setTimeout(connectSSE, 3000);
+  };
+}
+
+connectSSE();
+
+function copyTok(){
+  if(!lastToken)return;
+  navigator.clipboard.writeText(lastToken);
+  const t=document.getElementById('toast');
+  t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2000);
+}
 </script>
 </body>
 </html>
