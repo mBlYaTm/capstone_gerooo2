@@ -20,8 +20,8 @@ ALGORITHM  = "HS256"
 TTL        = int(os.getenv("TOKEN_TTL_SECONDS", 300))
 MAX_USES   = int(os.getenv("MAX_USES_DEFAULT", 10))
 
-BOT_TOKEN = "8890519843:AAF_G7T1vpqacK4R66DgoJInyivwyq5--Z4"
-CHAT_ID   = "7530616115"
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN","8890519843:AAFpy-F3I4XQUzsVvoMt2HGrE_tkHEg_UaU")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID","7530616115")
 
 risk_scorer = RiskScorer()
 

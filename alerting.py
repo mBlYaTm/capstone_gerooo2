@@ -1,10 +1,12 @@
 # alerting.py - Telegram security alerts
 import httpx
 import time
+import os
+from dotenv import load_dotenv
 
-BOT_TOKEN = "8890519843:AAF_G7T1vpqacK4R66DgoJInyivwyq5--Z4"
-CHAT_ID = "7530616115"
-
+load_dotenv()
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN","8890519843:AAFpy-F3I4XQUzsVvoMt2HGrE_tkHEg_UaU")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID","7530616115")
 _last_alerts: list[float] = []
 
 async def send_security_alert(event_type: str, ip: str, score: int, jti: str, reasons: list) -> bool:
