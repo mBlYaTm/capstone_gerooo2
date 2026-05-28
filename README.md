@@ -1,158 +1,120 @@
-Zero-Persistence Self-Destructing Token System
-API tokens that automatically invalidate within seconds of a credential leak — zero disk persistence, maximum security.
+# 🛡️ Zero-Persistence Self-Destructing Token System
 
-Tests Coverage Python Docker Security
+> API tokens that automatically invalidate within seconds of a credential leak
 
-What is this?
-A cybersecurity system that automatically destroys API tokens within seconds of a credential leak. Unlike traditional JWT systems, tokens are never written to disk and self-destruct under 5 different conditions.
+![Tests](https://img.shields.io/badge/tests-41%2F41-brightgreen)
+![Coverage](https://img.shields.io/badge/coverage-81%25-blue)
+![Python](https://img.shields.io/badge/python-3.13-blue)
+![Docker](https://img.shields.io/badge/docker-ready-blue)
 
-Quick Start
-Option 1 — Docker (Recommended)
+---
 
+## 🔥 What is this?
+
+A cybersecurity system that automatically destroys API tokens within seconds of a credential leak. Tokens are never written to disk and self-destruct under 5 different conditions.
+
+---
+
+## 🚀 Quick Start
+
+**Docker (Recommended)**
+
+```bash
 git clone https://github.com/mBlYaTm/capstone_gerooo2
 cd capstone_gerooo2
 docker-compose up -d
-Option 2 — Manual
+```
 
-# Install dependencies
+**Manual**
+
+```bash
 pip install -r requirements.txt
-
-# Start Redis
-docker run -d --name my-redis -p 6379:6379 redis:alpine redis-server --save "" --appendonly no
-
-# Start server
+docker run -d --name my-redis -p 6379:6379 redis:alpine
 py -m uvicorn main:app --reload
-Open dashboard → http://localhost:8000
+```
 
-Features
-Zero-Persistence — tokens never saved to disk, memory only
-Context Binding — tokens locked to IP address and User-Agent
-4 Anomaly Detectors — real-time attack detection with risk scoring
-5 Auto-Destruct Triggers — automatic token deletion on threat detection
-Telegram Alerts — instant HIGH risk notifications to your phone
-Live Dashboard — real-time event feed, dark and light mode
-Security Headers — CSP, X-Frame-Options, X-XSS-Protection
-Rate Limiting — 200 requests per minute per IP
-SSE Real-time — dashboard updates without page refresh
+Open → **http://localhost:8000**
 
+---
 
-How It Works
-6-Step Token Validation Pipeline
-Request comes in
-       │
-       ▼
-Step 1 — JWT signature check
-       │
-       ▼
-Step 2 — Redis existence check (TTL auto-expiry)
-       │
-       ▼
-Step 3 — Context binding (IP + User-Agent match)
-       │
-       ▼
-Step 4 — Max uses check
-       │
-       ▼
-Step 5 — Anomaly risk score check
-       │
-       ▼
-Step 6 — Increment use counter → return valid
-4 Anomaly Detectors
-Detector	Trigger	Risk Score
-Replay Attack	Same JTI used twice	+30
-Velocity Burst	10+ requests per second	+40
-Geo Impossible	Physically impossible travel	+50
-Endpoint Enum	5+ 404 path probing	+35
-Risk Levels
+## ✨ Features
 
-LOW (0–30) → Allow request
-MEDIUM (31–60) → Log and allow
-HIGH (61+) → Destroy token + Telegram alert
-5 Auto-Destruct Triggers
-#	Trigger	How
-1	TTL Expiry	Redis auto-delete after 300s
-2	Context Drift	IP address changed
-3	Max Uses	Usage limit exceeded
-4	High Risk	Anomaly score ≥ 61
-5	Admin Revoke	Manual deletion via API
+| Feature | Description |
+|---|---|
+| 🔒 Zero-Persistence | Tokens never saved to disk |
+| 🔗 Context Binding | Tokens locked to IP + User-Agent |
+| 🚨 4 Anomaly Detectors | Real-time attack detection |
+| 💥 5 Auto-Destruct Triggers | Automatic token deletion |
+| 📱 Telegram Alerts | Instant HIGH risk notifications |
+| 📊 Live Dashboard | Dark/light mode, real-time feed |
+| 🛡️ Security Headers | CSP, X-Frame-Options, Rate Limiting |
 
-Test Results
-pytest test_system.py -v --cov=. --cov-report=html
+---
 
-41 passed in 2.87s ✅
-Coverage: 81% ✅
-File	Coverage
-context.py	100%
-crypto_utils.py	100%
-token_engine.py	92%
-main.py	85%
-redis_store.py	81%
-destruct_engine.py	78%
-Project Structure
-zero_persistence/
-│
-├── main.py                 FastAPI entry point + SSE + Security Headers + Rate Limiting
-├── token_engine.py         Token creation and 6-step validation + Telegram alerts
-├── redis_store.py          Redis operations — store, delete, check tokens
-├── context.py              IP and User-Agent binding
-├── detectors.py            4 anomaly detectors and RiskScorer class
-├── destruct_engine.py      5 auto-destruct triggers and event logging
-├── alerting.py             Telegram security alert system
-├── crypto_utils.py         SHA-256 token hashing
-├── dashboard.html          Live security dashboard
-│
-├── test_system.py          41 unit tests
-├── load_test.py            Load testing — 20 concurrent users
-│
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-└── .env                    Secret config — never committed to GitHub
+## 🔐 4 Anomaly Detectors
 
-Tech Stack
-Technology	Purpose
-FastAPI	REST API framework + SSE
-Redis	Zero-persistence in-memory token storage
-Docker	Containerization
-JWT HS256	Token signing and verification
-SHA-256	Secure token hashing
-APScheduler	Background cleanup every 60 seconds
-Telegram Bot API	Real-time security alerts
-pytest	Unit testing framework
-httpx	HTTP client for Telegram
-📱 Telegram Alert Example
-When HIGH risk is detected, an instant alert is sent:
+| Detector | Trigger | Score |
+|---|---|---|
+| Replay Attack | Same JTI used twice | +30 |
+| Velocity Burst | 10+ requests per second | +40 |
+| Geo Impossible | Physically impossible travel | +50 |
+| Endpoint Enum | 5+ 404 path probing | +35 |
 
- SECURITY ALERT!
-━━━━━━━━━━━━━━━━━
-Event: Anomaly HIGH Risk
-IP: 127.0.0.1
-Risk Score: 70 (HIGH)
-Reasons: replay_attack, velocity_burst
-Action: Token destroyed
-Time: 2026-05-28 09:52:52
-JTI: b54de84a...
+- **LOW (0–30)** → Allow
+- **MEDIUM (31–60)** → Log
+- **HIGH (61+)** → Destroy token + Telegram alert
+
+---
+
+## 💥 5 Auto-Destruct Triggers
+
+| # | Trigger | Condition |
+|---|---|---|
+| 1 | TTL Expiry | Redis auto-delete after 300s |
+| 2 | Context Drift | IP address changed |
+| 3 | Max Uses | Usage limit exceeded |
+| 4 | High Risk | Anomaly score ≥ 61 |
+| 5 | Admin Revoke | Manual deletion via API |
+
+---
+
+## 📊 Test Results
+
+- ✅ 41/41 tests PASSED
+- ✅ Coverage: 81%
+- ✅ OWASP ZAP: 0 critical vulnerabilities
+
+---
+
+## 📁 Project Structure
 
 
- Security Headers
-All API responses include these security headers:
-
-Content-Security-Policy
-X-Content-Type-Options: nosniff
-X-Frame-Options: DENY
-X-XSS-Protection: 1; mode=block
-Referrer-Policy: strict-origin-when-cross-origin
-Strict-Transport-Security: max-age=31536000
-X-RateLimit-Limit: 200
-X-RateLimit-Remaining: [count]
-
-
-Docker Services
-services:
-  redis     → port 6379   Zero-persistence token storage
-  api       → port 8000   FastAPI server
-  grafana   → port 3000   Monitoring dashboard
+zero_persistence/ 
+├── main.py FastAPI + SSE + Security Headers + Rate Limiting 
+├── token_engine.py Token creation + 6-step validation + Telegram 
+├── redis_store.py Redis operations 
+├── context.py IP + User-Agent binding 
+├── detectors.py 4 anomaly detectors + RiskScorer 
+├── destruct_engine.py 5 auto-destruct triggers 
+├── alerting.py Telegram alerts 
+├── crypto_utils.py SHA-256 hashing 
+├── dashboard.html Live dashboard 
+├── test_system.py 41 unit tests 
+├── load_test.py Load testing 
+├── Dockerfile └── docker-compose.yml  
 
 
-Capstone Project
-Department: Cybersecurity Engineering Year: 2026 GitHub: https://github.com/mBlYaTm/capstone_gerooo2
+
+
+## 🔧 Tech Stack
+
+| Technology | Purpose |
+|---|---|
+| FastAPI | REST API + SSE |
+| Redis | Zero-persistence storage |
+| Docker | Containerization |
+| JWT HS256 | Token signing |
+| SHA-256 | Token hashing |
+| APScheduler | Background cleanup |
+| Telegram Bot | Real-time alerts |
+| pytest | Unit testing |
