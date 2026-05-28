@@ -34,6 +34,8 @@ Live Dashboard — real-time event feed, dark and light mode
 Security Headers — CSP, X-Frame-Options, X-XSS-Protection
 Rate Limiting — 200 requests per minute per IP
 SSE Real-time — dashboard updates without page refresh
+
+
 How It Works
 6-Step Token Validation Pipeline
 Request comes in
