@@ -2,16 +2,15 @@
 import uuid
 import time
 import os
-import httpx
 from jose import jwt, JWTError
 from fastapi import Request
 from dotenv import load_dotenv
 
-from crypto_utils import hash_token
-from redis_store import store_token, get_token_data, increment_use_count, token_exists
+from redis_store import store_token, consume_use, token_exists
 from context import get_context_hash, verify_context
-from detectors import RiskScorer
-from destruct_engine import destruct_token, DestructReason
+from detectors import RiskScorer, ReplayDetector
+from destruct_engine import destruct_token, log_security_event, DestructReason
+from alerting import send_security_alert
 
 load_dotenv()
 
@@ -20,34 +19,8 @@ ALGORITHM  = "HS256"
 TTL        = int(os.getenv("TOKEN_TTL_SECONDS", 300))
 MAX_USES   = int(os.getenv("MAX_USES_DEFAULT", 10))
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN","")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID","")
-
 risk_scorer = RiskScorer()
-
-
-def send_telegram_sync(event_type: str, ip: str, score: int, jti: str, reasons: list):
-    """Telegram мэдэгдэл синхрон аргаар илгээнэ."""
-    message = (
-        f"🚨 SECURITY ALERT!\n"
-        f"━━━━━━━━━━━━━━━━━\n"
-        f"Event: {event_type}\n"
-        f"IP: {ip}\n"
-        f"Risk Score: {score} (HIGH)\n"
-        f"Reasons: {', '.join(reasons)}\n"
-        f"Action: Token destroyed\n"
-        f"Time: {time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        f"JTI: {jti[:8]}..."
-    )
-    try:
-        with httpx.Client() as client:
-            client.post(
-                f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-                json={"chat_id": CHAT_ID, "text": message},
-                timeout=5
-            )
-    except Exception as e:
-        print(f"Telegram error: {e}")
+replay_detector = ReplayDetector()
 
 
 def create_token(user_id: str, request: Request, max_uses: int = MAX_USES) -> dict:
@@ -77,6 +50,7 @@ def create_token(user_id: str, request: Request, max_uses: int = MAX_USES) -> di
 
 def validate_token(token: str, request: Request) -> dict:
     """Validate token through 6-step verification pipeline."""
+    ip = request.client.host if request.client else "unknown"
 
     # Step 1: JWT decode
     try:
@@ -88,41 +62,53 @@ def validate_token(token: str, request: Request) -> dict:
     max_uses   = payload.get("max_uses", MAX_USES)
     stored_ctx = payload.get("ctx_hash", "")
 
-    # Step 2: Check Redis
+    # Step 2: Check Redis — устгагдсан токен дахин ирвэл replay attack
     if not token_exists(jti):
+        replay_score = replay_detector.check(jti)
+        if replay_score:
+            risk = {"score": replay_score, "level": "HIGH", "reasons": ["replay_attack"]}
+            log_security_event(f"REPLAY_ATTACK | jti={jti} | ip={ip}")
+            send_security_alert(
+                event_type="Replay of destroyed token",
+                ip=ip,
+                score=replay_score,
+                jti=jti,
+                reasons=risk["reasons"],
+            )
+            return {"valid": False, "reason": "replay_detected", "jti": jti, "risk": risk}
         return {"valid": False, "reason": "token_not_found_or_expired"}
 
     # Step 3: Context check
     if not verify_context(stored_ctx, request):
-        destruct_token(jti, DestructReason.CONTEXT_DRIFT,
-                       extra=f"ip={request.client.host}")
+        destruct_token(jti, DestructReason.CONTEXT_DRIFT, extra=f"ip={ip}")
         return {"valid": False, "reason": "context_drift_detected"}
 
-    # Step 4: Max uses check
-    token_data = get_token_data(jti)
-    use_count  = int(token_data.get("use_count", 0))
-    if use_count >= max_uses:
-        destruct_token(jti, DestructReason.MAX_USES, extra=f"uses={use_count}")
-        return {"valid": False, "reason": "max_uses_exceeded"}
-
-    # Step 5: Risk score check
-    ip   = request.client.host if request.client else "unknown"
+    # Step 4: Risk score check
     risk = risk_scorer.score(jti, ip)
     if risk["level"] == "HIGH":
         destruct_token(jti, DestructReason.HIGH_RISK,
                        extra=f"score={risk['score']},reasons={risk['reasons']}")
-        # Синхрон Telegram мэдэгдэл — asyncio шаардлагагүй
-        send_telegram_sync(
+        send_security_alert(
             event_type="Anomaly HIGH Risk",
             ip=ip,
             score=risk["score"],
             jti=jti,
-            reasons=risk["reasons"]
+            reasons=risk["reasons"],
         )
-        return {"valid": False, "reason": "high_risk_detected", "risk": risk}
+        return {"valid": False, "reason": "high_risk_detected", "jti": jti, "risk": risk}
 
-    # Step 6: Increment use counter
-    new_count = increment_use_count(jti)
+    # Step 5: Max uses — шалгах ба нэмэхийг нэг atomic алхмаар хийнэ
+    new_count = consume_use(jti)
+    if new_count == -1:
+        # Шалгалтын явцад TTL дууссан эсвэл өөр хүсэлт устгасан
+        return {"valid": False, "reason": "token_not_found_or_expired"}
+    if new_count > max_uses:
+        destruct_token(jti, DestructReason.MAX_USES, extra=f"uses={new_count}")
+        return {"valid": False, "reason": "max_uses_exceeded"}
+
+    # Step 6: Сүүлчийн ашиглалт бол хүсэлтийг зөвшөөрөөд токеныг шууд устгана
+    if new_count == max_uses:
+        destruct_token(jti, DestructReason.MAX_USES, extra=f"uses={new_count},final_use")
 
     return {
         "valid":     True,

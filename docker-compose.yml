@@ -1,10 +1,8 @@
-version: '3.8'
-
 services:
 
   # ── Redis — Zero-Persistence (no disk save) ──────────────────────────────
   redis:
-    image: redis:alpine
+    image: redis:7.2-alpine
     container_name: zero-redis
     ports:
       - "6379:6379"
@@ -36,12 +34,44 @@ services:
     working_dir: /app
     command: uvicorn main:app --host 0.0.0.0 --port 8000
 
-  # ── Grafana Dashboard ─────────────────────────────────────────────────────
+  # ── Redis Exporter — Redis-ийн мэдээллийг Prometheus-д өгнө ──────────────
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: zero-redis-exporter
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+      # token:* болон used_jti:* key-үүдийн тоог тусад нь тоолно
+      - REDIS_EXPORTER_COUNT_KEYS=db0=token:*,db0=used_jti:*
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Prometheus — 5 секунд бүр exporter-оос өгөгдөл цуглуулна ─────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: zero-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - redis-exporter
+    restart: unless-stopped
+
+  # ── Grafana Dashboard — Prometheus-ээс уншина ─────────────────────────────
   grafana:
-    image: grafana/grafana
+    image: grafana/grafana:11.1.0
     container_name: zero-grafana
     ports:
       - "3000:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
     restart: unless-stopped

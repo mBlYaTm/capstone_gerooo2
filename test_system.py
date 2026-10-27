@@ -128,13 +128,14 @@ def test_risk_scorer_returns_dict():
     assert "level" in result
     assert result["level"] in ["LOW", "MEDIUM", "HIGH"]
 
-def test_replay_detector_blocks_second_use():
+def test_replay_detector_flags_burned_jti():
     from detectors import ReplayDetector
     import uuid
     d = ReplayDetector()
     jti = str(uuid.uuid4())
-    assert d.check(jti) == 0    # Анх удаа: 0 оноо
-    assert d.check(jti) == 30   # Хоёр дахь удаа: 30 оноо (replay!)
+    assert d.check(jti) == 0    # Амьд/шинэ токен: 0 оноо
+    d.burn(jti)                 # Токен устгагдлаа
+    assert d.check(jti) == 30   # Устгагдсан токен дахин ирлээ: replay!
 
 # ── Additional Detector Tests (coverage boost) ────────────────────────────────
 
@@ -234,26 +235,27 @@ def test_replay_detector_new_jti_is_zero():
     d = ReplayDetector()
     assert d.check(str(uuid.uuid4())) == 0
 
-def test_replay_detector_third_use_still_thirty():
+def test_replay_detector_check_has_no_side_effect():
     from detectors import ReplayDetector
     import uuid
     d = ReplayDetector()
     jti = str(uuid.uuid4())
-    d.check(jti)           # first  → 0
-    assert d.check(jti) == 30  # second → 30
-    assert d.check(jti) == 30  # third  → still 30
+    # Шалгах нь өөрөө токеныг "шатаахгүй" — олон удаа шалгасан ч 0
+    assert d.check(jti) == 0
+    assert d.check(jti) == 0
+    assert d.check(jti) == 0
 
 def test_risk_scorer_medium_level():
-    from detectors import RiskScorer, ReplayDetector
+    from detectors import RiskScorer
     import uuid
-    # Directly trigger replay +30 then check scorer treats it as MEDIUM
-    jti = str(uuid.uuid4())
-    replay = ReplayDetector()
-    replay.check(jti)   # first: marks as used (returns 0)
-    score = replay.check(jti)  # second: returns 30
-    assert score == 30  # replay confirmed
-    # Score 30 = MEDIUM threshold boundary — just verify detector works
-    assert score >= 30
+    rs = RiskScorer()
+    ip = f"10.3.{uuid.uuid4().hex[:3]}.1"
+    # Велосити burst (+40) ганцаараа → MEDIUM (31-60)
+    for _ in range(11):
+        rs.velocity.check(ip)
+    result = rs.score(str(uuid.uuid4()), ip)
+    assert result["level"] == "MEDIUM"
+    assert "velocity_burst" in result["reasons"]
 
 def test_risk_scorer_reasons_empty_on_clean():
     from detectors import RiskScorer
@@ -303,3 +305,136 @@ def test_increment_use_count():
 def test_ping_returns_true():
     from redis_store import ping
     assert ping() is True
+
+# ── Засварын тестүүд (bug fixes) ──────────────────────────────────────────────
+
+class _FakeClient:
+    def __init__(self, host):
+        self.host = host
+
+class _FakeRequest:
+    """validate_token / get_context_hash-д хэрэгтэй хамгийн бага Request."""
+    def __init__(self, host, user_agent="pytest-agent"):
+        self.client  = _FakeClient(host)
+        self.headers = {"user-agent": user_agent}
+
+def test_context_hash_stable_across_minutes(monkeypatch):
+    # Өмнө нь минут солигдоход hash өөрчлөгдөж, токен context_drift болдог байсан
+    import context
+    req = _FakeRequest("10.4.0.1")
+    monkeypatch.setattr(time, "time", lambda: 1_700_000_059.0)   # 12:00:59
+    h1 = context.get_context_hash(req)
+    monkeypatch.setattr(time, "time", lambda: 1_700_000_181.0)   # 2 минутын дараа
+    h2 = context.get_context_hash(req)
+    assert h1 == h2
+
+def test_context_hash_changes_with_ip_or_agent():
+    import context
+    base = context.get_context_hash(_FakeRequest("10.4.0.1", "A"))
+    assert base != context.get_context_hash(_FakeRequest("10.4.0.2", "A"))
+    assert base != context.get_context_hash(_FakeRequest("10.4.0.1", "B"))
+
+def test_multi_use_token_not_flagged_as_replay():
+    # max_uses=4 токеныг 4 удаа ашиглахад бүгд хүчинтэй, replay гэж тооцохгүй
+    from token_engine import create_token, validate_token
+    import uuid
+    req = _FakeRequest(f"10.5.{uuid.uuid4().hex[:3]}.1")
+    token = create_token("multi", req, max_uses=4)["token"]
+    for expected_left in (3, 2, 1, 0):
+        res = validate_token(token, req)
+        assert res["valid"] is True
+        assert res["uses_left"] == expected_left
+        assert "replay_attack" not in res["risk"]["reasons"]
+
+def test_token_destroyed_after_final_use_then_replay_detected():
+    from token_engine import create_token, validate_token
+    from redis_store import token_exists
+    import uuid
+    req = _FakeRequest(f"10.6.{uuid.uuid4().hex[:3]}.1")
+    issued = create_token("final", req, max_uses=1)
+    assert validate_token(issued["token"], req)["valid"] is True
+    assert token_exists(issued["jti"]) is False          # сүүлчийн ашиглалтаар устсан
+    res = validate_token(issued["token"], req)           # алдагдсан токеныг дахин ашиглах
+    assert res["valid"] is False
+    assert res["reason"] == "replay_detected"
+    assert res["risk"]["reasons"] == ["replay_attack"]
+
+def test_admin_revoked_token_reuse_is_replay():
+    issued = client.post("/request-token", json={"user_id": "ivan"})
+    client.delete(f"/admin/revoke/{issued.json()['jti']}", auth=("admin", "admin123"))
+    r = client.post("/validate", json={"token": issued.json()["token"]})
+    assert r.status_code == 401
+    assert r.json()["detail"]["reason"] == "replay_detected"
+
+def test_consume_use_missing_token_creates_nothing():
+    from redis_store import consume_use, r as rc
+    import uuid
+    jti = str(uuid.uuid4())
+    assert consume_use(jti) == -1
+    assert rc.exists(f"token:{jti}") == 0    # TTL-гүй "сүнс" key үүсээгүй
+
+def test_max_uses_holds_under_concurrency():
+    # 20 зэрэг хүсэлт, max_uses=5 → яг 5 нь л хүчинтэй байх ёстой
+    from token_engine import create_token, validate_token
+    from concurrent.futures import ThreadPoolExecutor
+    import uuid
+    req = _FakeRequest(f"10.7.{uuid.uuid4().hex[:3]}.1")
+    token = create_token("race", req, max_uses=5)["token"]
+    with ThreadPoolExecutor(max_workers=20) as pool:
+        results = list(pool.map(lambda _: validate_token(token, req), range(20)))
+    assert sum(1 for res in results if res["valid"]) == 5
+
+def test_enum_404s_raise_risk_for_ip():
+    from detectors import RiskScorer, EndpointEnumerationDetector
+    import uuid
+    ip = f"10.8.{uuid.uuid4().hex[:3]}.1"
+    d = EndpointEnumerationDetector()
+    for i in range(6):
+        d.check(ip, f"/admin{i}", 404)
+    result = RiskScorer().score(str(uuid.uuid4()), ip)
+    assert "endpoint_enumeration" in result["reasons"]
+    assert result["score"] >= 35
+
+def test_404_middleware_records_paths():
+    from redis_store import r as rc
+    key = "enum_paths:testclient"
+    rc.delete(key)
+    try:
+        for i in range(3):
+            assert client.get(f"/no-such-page-{i}").status_code == 404
+        assert rc.scard(key) == 3
+    finally:
+        rc.delete(key)   # бусад тестийн эрсдлийн оноонд нөлөөлөхгүй
+
+def test_high_risk_sends_telegram_alert(monkeypatch):
+    import token_engine
+    import uuid
+    sent = []
+    monkeypatch.setattr(token_engine, "send_security_alert", lambda **kw: sent.append(kw))
+    monkeypatch.setattr(token_engine.risk_scorer, "score",
+                        lambda jti, ip: {"score": 75, "level": "HIGH",
+                                         "reasons": ["velocity_burst", "endpoint_enumeration"]})
+    req = _FakeRequest(f"10.9.{uuid.uuid4().hex[:3]}.1")
+    token = token_engine.create_token("risky", req)["token"]
+    res = token_engine.validate_token(token, req)
+    assert res["reason"] == "high_risk_detected"
+    assert len(sent) == 1 and sent[0]["score"] == 75
+
+def test_telegram_skipped_when_not_configured(monkeypatch):
+    import alerting
+    monkeypatch.setattr(alerting, "BOT_TOKEN", "")
+    called = []
+    monkeypatch.setattr(alerting, "_post_to_telegram", lambda m: called.append(m) or True)
+    assert alerting.send_security_alert("t", "1.1.1.1", 70, "abcdefgh", [], background=False) is False
+    assert called == []
+
+def test_telegram_throttle_max_five_per_minute(monkeypatch):
+    import alerting
+    monkeypatch.setattr(alerting, "BOT_TOKEN", "123:test")
+    monkeypatch.setattr(alerting, "CHAT_ID", "42")
+    monkeypatch.setattr(alerting, "_last_alerts", [])
+    sent = []
+    monkeypatch.setattr(alerting, "_post_to_telegram", lambda m: sent.append(m) or True)
+    for _ in range(8):
+        alerting.send_security_alert("t", "1.1.1.1", 70, "abcdefgh", ["x"], background=False)
+    assert len(sent) == 5

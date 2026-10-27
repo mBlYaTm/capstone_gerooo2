@@ -16,15 +16,17 @@ r = redis.Redis(
 class ReplayDetector:
     """
     Replay Attack илрүүлэгч.
-    Нэг jti-г хоёр удаа ашиглахыг оролдвол (+30 оноо).
+    Токен устгагдах бүрт (5 trigger аль нь ч) jti-г "шатсан" гэж тэмдэглэнэ.
+    Устгагдсан токеныг дахин ашиглахыг оролдвол (+30 оноо) — алдагдсан токен.
+    max_uses дотор хэд хэдэн удаа хэвийн ашиглах нь replay биш.
     """
+    def burn(self, jti: str, ttl: int = 3600) -> None:
+        r.set(f"used_jti:{jti}", "1", ex=ttl)
+
     def check(self, jti: str) -> int:
-        key = f"used_jti:{jti}"
-        # nx=True: зөвхөн шинэ key байвал True буцаана
-        is_new = r.set(key, "1", nx=True, ex=3600)
-        if is_new:
-            return 0        # Анх удаа — хэвийн
-        return 30           # Дахин ашигласан — replay attack!
+        if r.exists(f"used_jti:{jti}"):
+            return 30       # Устгагдсан токен дахин ирлээ — replay attack!
+        return 0
 
 
 class VelocityDetector:
@@ -106,8 +108,11 @@ class EndpointEnumerationDetector:
         key = f"enum_paths:{ip}"
         r.sadd(key, path)
         r.expire(key, 3600)
-        count = r.scard(key)
-        if count > 5:
+        return self.current(ip)
+
+    def current(self, ip: str) -> int:
+        """Энэ IP сүүлийн 1 цагт 5-аас олон өөр 404 зам хайсан бол +35."""
+        if r.scard(f"enum_paths:{ip}") > 5:
             return 35
         return 0
 
@@ -123,14 +128,11 @@ class RiskScorer:
         self.geo = GeoImpossibilityDetector()
         self.enum = EndpointEnumerationDetector()
 
-    def score(self, jti: str, ip: str, path: str = "/", status: int = 200) -> dict:
+    def score(self, jti: str, ip: str) -> dict:
+        # Replay-г энд тооцохгүй: амьд токен replay байж чадахгүй.
+        # Устгагдсан токен ирэхэд token_engine.validate_token шалгана.
         total = 0
         reasons = []
-
-        r_score = self.replay.check(jti)
-        if r_score:
-            total += r_score
-            reasons.append("replay_attack")
 
         v_score = self.velocity.check(ip)
         if v_score:
@@ -142,7 +144,8 @@ class RiskScorer:
             total += g_score
             reasons.append("geo_impossibility")
 
-        e_score = self.enum.check(ip, path, status)
+        # 404-үүдийг main.py-ийн middleware бүртгэнэ; энд зөвхөн IP-ийн төлөвийг уншина
+        e_score = self.enum.current(ip)
         if e_score:
             total += e_score
             reasons.append("endpoint_enumeration")

@@ -1,0 +1,8 @@
+# Grafana асахдаа dashboards/ фолдер доторх JSON-уудыг ачаална
+apiVersion: 1
+providers:
+  - name: zero-persistence
+    folder: ""
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

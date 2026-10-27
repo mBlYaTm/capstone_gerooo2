@@ -1,0 +1,8 @@
+venv/
+__pycache__/
+*.pyc
+htmlcov/
+.pytest_cache/
+.git/
+ZAP_scan_report/
+2026-05-28-ZAP-Report-/

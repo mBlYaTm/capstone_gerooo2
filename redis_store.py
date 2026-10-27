@@ -40,6 +40,24 @@ def increment_use_count(jti: str) -> int:
     return r.hincrby(f"token:{jti}", "use_count", 1)
 
 
+# Lua скрипт Redis дотор нэг алхмаар (atomic) ажиллана:
+# токен байвал use_count-г нэмээд шинэ утгыг буцаана, байхгүй бол -1.
+# Ингэснээр зэрэг ирсэн хүсэлтүүд "шалгаад дараа нь нэмэх" хооронд
+# орж max_uses-ээс давах (race condition) боломжгүй болно,
+# мөн устсан токенд TTL-гүй шинэ key үүсэхгүй.
+_CONSUME_USE = r.register_script("""
+if redis.call('EXISTS', KEYS[1]) == 1 then
+    return redis.call('HINCRBY', KEYS[1], 'use_count', 1)
+end
+return -1
+""")
+
+
+def consume_use(jti: str) -> int:
+    """Нэг ашиглалтыг atomic-аар бүртгэнэ. Токен байхгүй бол -1."""
+    return int(_CONSUME_USE(keys=[f"token:{jti}"]))
+
+
 def delete_token(jti: str) -> bool:
     """Токеныг Redis-аас устгана (self-destruct)."""
     deleted = r.delete(f"token:{jti}")

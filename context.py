@@ -1,21 +1,19 @@
 # context.py - Токеныг IP болон User-Agent-тэй холбоно
 import hashlib
-import time
 import hmac
 from fastapi import Request
 
 
 def get_context_hash(request: Request) -> str:
     """
-    IP + User-Agent + цагийн цонх ашиглан context hash үүсгэнэ.
-    Нэг минут бүрт шинэ цонх нээгдэнэ (жижиг хазайлтыг зөвшөөрнө).
+    IP + User-Agent ашиглан context hash үүсгэнэ.
+    Цагийн цонх оруулахгүй: өмнө нь минут солигдоход hash өөрчлөгдөж,
+    хүчинтэй токен "context_drift" болж устдаг байсан. Хугацааг TTL хариуцна.
     """
     ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
-    # Минутад нэг удаа өөрчлөгдөх цагийн хэсэг
-    time_window = str(int(time.time() // 60))
 
-    raw = f"{ip}:{user_agent}:{time_window}"
+    raw = f"{ip}:{user_agent}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
 

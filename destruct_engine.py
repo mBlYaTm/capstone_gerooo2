@@ -3,6 +3,9 @@ import logging
 import time
 from enum import Enum
 from redis_store import delete_token, r
+from detectors import ReplayDetector
+
+_replay = ReplayDetector()
 
 # Бүх устгалтын үйл явдлыг файлд бичнэ
 logging.basicConfig(
@@ -27,12 +30,21 @@ def destruct_token(jti: str, reason: DestructReason, extra: str = "") -> bool:
     Бүх 5 trigger энэ функцийг дуудна.
     """
     success = delete_token(jti)
+    if success:
+        # Устгагдсан jti-г тэмдэглэнэ — дахин ирвэл replay attack гэж илрүүлнэ
+        _replay.burn(jti)
     msg = f"TOKEN_DESTRUCTED | jti={jti} | reason={reason.value}"
     if extra:
         msg += f" | info={extra}"
     logger.warning(msg)
     print(f"🔴 {msg}")
     return success
+
+
+def log_security_event(msg: str) -> None:
+    """Устгалт биш аюулгүй байдлын үйл явдлыг (жишээ нь replay) мөн лог-д бичнэ."""
+    logger.warning(f"SECURITY_EVENT | {msg}")
+    print(f"🟠 {msg}")
 
 
 def cleanup_job():

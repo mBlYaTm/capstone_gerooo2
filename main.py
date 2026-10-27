@@ -12,6 +12,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from token_engine import create_token, validate_token
 from destruct_engine import cleanup_job, destruct_token, DestructReason
 from redis_store import ping, token_exists, delete_token, r as redis_client
+from detectors import EndpointEnumerationDetector
+
+enum_detector = EndpointEnumerationDetector()
 
 # ── SSE Event Queue ───────────────────────────────────────────────────────────
 _sse_clients: list[asyncio.Queue] = []
@@ -72,6 +75,23 @@ async def add_security_headers(request: Request, call_next):
     )
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
+    return response
+
+# ── Endpoint Enumeration Middleware ───────────────────────────────────────────
+@app.middleware("http")
+async def record_404_middleware(request: Request, call_next):
+    """404 хариу бүрийг IP-аар бүртгэнэ — олон зам хайсан IP-ийн эрсдэл өснө."""
+    response = await call_next(request)
+    if response.status_code == 404:
+        ip = request.client.host if request.client else "unknown"
+        try:
+            if enum_detector.check(ip, request.url.path, 404):
+                broadcast_event("log", {
+                    "msg":   f"Endpoint enumeration — IP: {ip}",
+                    "level": "wrn"
+                })
+        except Exception:
+            pass    # Redis алдаа гарсан ч хариуг саатуулахгүй
     return response
 
 # ── Rate Limiting Middleware ──────────────────────────────────────────────────
@@ -193,10 +213,11 @@ async def validate(body: ValidateRequest, request: Request):
         risk   = result.get("risk", {})
         broadcast_event("log", {"msg": f"Token rejected — {reason}", "level": "err"})
 
-        if reason == "high_risk_detected" and risk:
+        if reason in ("high_risk_detected", "replay_detected") and risk:
             ip = request.client.host if request.client else "unknown"
             broadcast_event("telegram_alert", {
-                "event":   "Anomaly HIGH Risk",
+                "event":   "Replay of destroyed token" if reason == "replay_detected"
+                           else "Anomaly HIGH Risk",
                 "ip":      ip,
                 "score":   risk.get("score", 0),
                 "reasons": risk.get("reasons", []),
