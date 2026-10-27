@@ -1,0 +1,10 @@
+{
+  "timestamp": "2026-06-08T09:32:49.414923",
+  "results": {
+    "total_requests": 200,
+    "successful": 149,
+    "failed": 51,
+    "pass_rate_percent": 74.5,
+    "requests_per_second": 8.6
+  }
+}

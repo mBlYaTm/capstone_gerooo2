@@ -3,3 +3,7 @@ venv/
 __pycache__/ 
 *.pyc 
 htmlcov/ 
+.coverage
+.pytest_cache/
+.DS_Store
+*.log

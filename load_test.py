@@ -121,9 +121,9 @@ def run_load_test():
             "requests_per_second": round(rps, 1),
         }
     }
-    with open("load_test_report.json", "w") as f:
+    with open("reports/load_test_report.json", "w") as f:
         json.dump(report, f, indent=2)
-    print(f"  Report saved: load_test_report.json\n")
+    print(f"  Report saved: reports/load_test_report.json\n")
 
 if __name__ == "__main__":
     run_load_test()
