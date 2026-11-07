@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZeroPersist — 보안 대시보드</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+[data-theme="dark"]{--bg:#050508;--bg-2:#0c0c12;--bg-3:#13131c;--bg-4:#1a1a28;--border:rgba(255,255,255,0.06);--border-2:rgba(255,255,255,0.12);--text:#eeeef0;--text-2:#7878a0;--text-3:#404060;--accent:#6366f1;--accent-2:#818cf8;--green:#10b981;--green-2:#34d399;--red:#ef4444;--yellow:#f59e0b;--cyan:#06b6d4;--purple:#8b5cf6}
+[data-theme="light"]{--bg:#f8f8fc;--bg-2:#ffffff;--bg-3:#f0f0f8;--bg-4:#e8e8f4;--border:rgba(0,0,0,0.06);--border-2:rgba(0,0,0,0.12);--text:#0a0a14;--text-2:#505070;--text-3:#a0a0c0;--accent:#4f46e5;--accent-2:#6366f1;--green:#059669;--green-2:#10b981;--red:#dc2626;--yellow:#d97706;--cyan:#0891b2;--purple:#7c3aed}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;min-height:100vh;overflow-x:hidden;transition:background .4s,color .4s}
+.bg-canvas{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.bg-orb{position:absolute;border-radius:50%;filter:blur(80px);animation:orb-float 12s ease-in-out infinite}
+.orb-1{width:500px;height:500px;background:radial-gradient(circle,rgba(99,102,241,0.08) 0%,transparent 70%);top:-100px;right:-100px;animation-delay:0s}
+.orb-2{width:400px;height:400px;background:radial-gradient(circle,rgba(16,185,129,0.06) 0%,transparent 70%);bottom:-100px;left:-100px;animation-delay:-6s}
+.orb-3{width:300px;height:300px;background:radial-gradient(circle,rgba(6,182,212,0.05) 0%,transparent 70%);top:50%;left:50%;animation-delay:-3s}
+@keyframes orb-float{0%,100%{transform:translate(0,0) scale(1)}33%{transform:translate(30px,-30px) scale(1.05)}66%{transform:translate(-20px,20px) scale(.95)}}
+.bg-grid{position:fixed;inset:0;pointer-events:none;z-index:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;mask-image:radial-gradient(ellipse 80% 80% at 50% 50%,black 20%,transparent 100%)}
+.shell{max-width:1140px;margin:0 auto;padding:0 28px 100px;position:relative;z-index:1}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 0;position:sticky;top:0;z-index:100;background:rgba(5,5,8,0.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);margin-bottom:56px;transition:background .4s}
+[data-theme="light"] .topbar{background:rgba(248,248,252,0.9)}
+.topbar-right{display:flex;align-items:center;gap:10px}
+
+/* STATUS CHIP - CLICKABLE */
+.status-chip{display:flex;align-items:center;gap:7px;padding:6px 14px;border-radius:999px;border:1px solid var(--border-2);font-size:12px;font-family:'Space Mono',monospace;background:var(--bg-2);color:var(--text-2);transition:all .3s;cursor:pointer;user-select:none}
+.status-chip:hover{transform:scale(1.03)}
+.status-chip.online{border-color:rgba(16,185,129,0.4);color:var(--green-2);background:rgba(16,185,129,0.06)}
+.status-chip.offline{border-color:rgba(239,68,68,0.4);color:var(--red);background:rgba(239,68,68,0.08);animation:offline-shake 0.5s ease}
+@keyframes offline-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+.pulse-ring{width:7px;height:7px;border-radius:50%;background:currentColor;position:relative;flex-shrink:0}
+.pulse-ring::after{content:'';position:absolute;inset:-3px;border-radius:50%;border:1px solid currentColor;animation:ring 2s ease-out infinite;opacity:0}
+@keyframes ring{0%{transform:scale(.8);opacity:.8}100%{transform:scale(2);opacity:0}}
+.icon-btn{width:36px;height:36px;border-radius:9px;border:1px solid var(--border-2);background:var(--bg-2);color:var(--text-2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .2s}
+.icon-btn:hover{color:var(--text);border-color:var(--accent)}
+
+/* OFFLINE MODAL */
+.offline-modal{display:none;position:fixed;inset:0;z-index:999;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px)}
+.offline-modal.show{display:flex;animation:modal-in .25s ease}
+@keyframes modal-in{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.offline-box{background:var(--bg-2);border:1px solid rgba(239,68,68,0.3);border-radius:20px;padding:32px;max-width:440px;width:90%;position:relative}
+.offline-box-top{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.offline-icon{width:40px;height:40px;border-radius:10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);display:flex;align-items:center;justify-content:center;font-size:18px}
+.offline-title{font-size:16px;font-weight:700;color:var(--red)}
+.offline-sub{font-size:12px;color:var(--text-3);margin-top:2px}
+.offline-checks{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
+.check-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:var(--bg-3);border:1px solid var(--border)}
+.check-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.check-dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.check-dot.fail{background:var(--red);box-shadow:0 0 6px var(--red);animation:fail-pulse 1s ease-in-out infinite}
+@keyframes fail-pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.check-dot.checking{background:var(--yellow);animation:fail-pulse .8s ease-in-out infinite}
+.check-label{font-size:12px;color:var(--text-2)}
+.check-status{margin-left:auto;font-size:11px;font-family:'Space Mono',monospace}
+.check-status.ok{color:var(--green)}
+.check-status.fail{color:var(--red)}
+.check-status.checking{color:var(--yellow)}
+.offline-hint{background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--text-2);line-height:1.6;margin-bottom:20px}
+.offline-hint code{font-family:'Space Mono',monospace;color:var(--accent-2);font-size:11px}
+.close-modal{width:100%;padding:10px;border:1px solid var(--border-2);border-radius:10px;background:var(--bg-3);color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .2s}
+.close-modal:hover{background:var(--bg-4)}
+
+/* HERO */
+.hero{text-align:center;margin-bottom:56px;animation:fade-up .8s ease both}
+@keyframes fade-up{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+.hero h1{font-size:clamp(36px,5vw,60px);font-weight:700;letter-spacing:-2.5px;line-height:1.05;margin-bottom:16px}
+.hero h1 .grad{background:linear-gradient(135deg,var(--accent-2),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.hero-sub{font-size:16px;color:var(--text-2);font-weight:300;max-width:480px;margin:0 auto;line-height:1.7}
+
+/* TICKER */
+.threat-ticker{background:var(--bg-2);border:1px solid var(--border);border-radius:16px;padding:14px 20px;margin-bottom:24px;display:flex;align-items:center;gap:16px;overflow:hidden;animation:fade-up .8s .1s ease both}
+.ticker-label{font-size:10px;font-family:'Space Mono',monospace;color:var(--text-3);letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap;flex-shrink:0}
+.ticker-track{flex:1;overflow:hidden}
+.ticker-inner{display:flex;gap:40px;animation:ticker-scroll 20s linear infinite;white-space:nowrap}
+@keyframes ticker-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.ticker-item{font-size:11px;font-family:'Space Mono',monospace;color:var(--text-3);flex-shrink:0}
+.ticker-item span{color:var(--accent-2)}
+
+/* STATS */
+.stat-ribbon{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;animation:fade-up .8s .15s ease both}
+.stat-card{background:var(--bg-2);border:1px solid var(--border);border-radius:16px;padding:22px 20px;position:relative;overflow:hidden;cursor:default;transition:transform .25s,border-color .25s,box-shadow .25s}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:0;transition:opacity .3s}
+.stat-card:hover{transform:translateY(-3px);border-color:var(--border-2);box-shadow:0 20px 40px rgba(0,0,0,0.2)}
+.stat-card:hover::before{opacity:1}
+.stat-label{font-size:10px;font-family:'Space Mono',monospace;color:var(--text-3);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:12px}
+.stat-num{font-size:32px;font-weight:700;letter-spacing:-1.5px;color:var(--text);font-variant-numeric:tabular-nums;line-height:1;margin-bottom:6px}
+.stat-meta{font-size:11px;color:var(--text-3)}
+.stat-icon{position:absolute;top:18px;right:18px;font-size:20px;opacity:.15}
+
+/* GRID */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;animation:fade-up .8s .3s ease both}
+.panel{background:var(--bg-2);border:1px solid var(--border);border-radius:20px;padding:26px;transition:border-color .2s;position:relative;overflow:hidden}
+.panel::after{content:'';position:absolute;inset:0;border-radius:20px;background:radial-gradient(ellipse at top right,rgba(99,102,241,0.04),transparent 60%);pointer-events:none}
+.panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
+.panel-title{font-size:13px;font-weight:600;letter-spacing:-.3px}
+.panel-chip{font-size:10px;font-family:'Space Mono',monospace;padding:3px 9px;border-radius:5px;border:1px solid var(--border-2);color:var(--text-3);letter-spacing:.5px}
+
+/* TABS */
+.tab-bar{display:flex;gap:3px;background:var(--bg-3);padding:3px;border-radius:10px;margin-bottom:18px}
+.tab-btn{flex:1;padding:7px 10px;border:none;background:none;color:var(--text-3);font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:500;cursor:pointer;border-radius:8px;transition:all .15s}
+.tab-btn.active{background:var(--bg-2);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.15)}
+.tab-pane{display:none}.tab-pane.active{display:block}
+
+/* FORM */
+.f-group{margin-bottom:12px}
+.f-label{display:block;font-size:10px;font-family:'Space Mono',monospace;color:var(--text-3);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+.f-input{width:100%;background:var(--bg-3);border:1px solid var(--border);border-radius:10px;padding:10px 13px;color:var(--text);font-family:'Space Mono',monospace;font-size:12px;outline:none;transition:border-color .15s,box-shadow .15s}
+.f-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(99,102,241,0.1)}
+.f-input::placeholder{color:var(--text-3)}
+.act-btn{width:100%;padding:11px;border:none;border-radius:10px;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:-.3px}
+.act-btn:active{transform:scale(.98)}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--purple));color:white}
+.btn-primary:hover{box-shadow:0 8px 24px rgba(99,102,241,0.35)}
+.btn-success{background:linear-gradient(135deg,var(--green),#0d9488);color:white}
+.btn-success:hover{box-shadow:0 8px 24px rgba(16,185,129,0.35)}
+.btn-danger{background:linear-gradient(135deg,var(--red),#dc2626);color:white}
+.btn-danger:hover{box-shadow:0 8px 24px rgba(239,68,68,0.35)}
+.out-box{margin-top:12px;background:var(--bg-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-family:'Space Mono',monospace;font-size:11px;line-height:1.8;min-height:70px;color:var(--text-3);white-space:pre-wrap;word-break:break-all;transition:all .2s}
+.out-box.ok{border-color:rgba(16,185,129,0.4);color:var(--green-2);background:rgba(16,185,129,0.04)}
+.out-box.err{border-color:rgba(239,68,68,0.4);color:var(--red);background:rgba(239,68,68,0.04)}
+.atk-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+.btn-attack{position:relative;padding:9px 8px 9px 28px;border-radius:8px;border:1px solid rgba(239,68,68,0.35);background:rgba(239,68,68,0.08);color:var(--red);font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;text-align:left}
+.btn-attack:hover{background:rgba(239,68,68,0.18);box-shadow:0 4px 14px rgba(239,68,68,0.2)}
+.btn-attack:disabled{opacity:.5;cursor:wait}
+.btn-attack.selected{border-color:var(--red);background:rgba(239,68,68,0.28);box-shadow:0 0 0 1px var(--red) inset}
+.atk-check{position:absolute;left:7px;top:9px;width:14px;height:14px;accent-color:var(--red);cursor:pointer}
+.atk-sel-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:11px;color:var(--text-3)}
+.atk-sel-row label{display:flex;align-items:center;gap:5px;cursor:pointer}
+.atk-console{margin-top:4px;background:var(--bg-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-family:'Space Mono',monospace;font-size:11px;line-height:1.9;min-height:200px;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;color:var(--text-3)}
+.atk-line-hacker{color:var(--red)}
+.atk-line-victim{color:var(--text-2)}
+.atk-line-system{color:var(--green-2)}
+.tok-box{display:none;margin-top:10px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:10px 14px;font-family:'Space Mono',monospace;font-size:10px;color:var(--accent-2);word-break:break-all;cursor:pointer;position:relative;line-height:1.7;transition:border-color .15s}
+.tok-box:hover{border-color:var(--accent)}
+.tok-box::after{content:'copy';position:absolute;top:8px;right:10px;font-size:9px;color:var(--text-3);letter-spacing:1px}
+
+/* DETECTOR — ENHANCED */
+.det-grid{display:flex;flex-direction:column;gap:8px}
+.det-row{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-radius:10px;transition:all .3s;position:relative;overflow:hidden;border:1px solid var(--border);background:var(--bg-3)}
+
+/* Idle state */
+.det-row .det-glow{position:absolute;inset:0;border-radius:10px;opacity:0;transition:opacity .4s}
+.det-row .det-scan{position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.04),transparent);transition:none}
+
+/* FIRED states per detector type */
+.det-row.fired-red{border-color:rgba(239,68,68,0.5);background:rgba(239,68,68,0.06);animation:det-alarm 0.4s ease}
+.det-row.fired-red .det-glow{background:radial-gradient(ellipse at left,rgba(239,68,68,0.12),transparent 70%);opacity:1}
+.det-row.fired-red .det-scan{animation:scan-sweep 2s ease-in-out infinite;background:linear-gradient(90deg,transparent,rgba(239,68,68,0.12),transparent)}
+
+.det-row.fired-yellow{border-color:rgba(245,158,11,0.5);background:rgba(245,158,11,0.06);animation:det-alarm 0.4s ease}
+.det-row.fired-yellow .det-glow{background:radial-gradient(ellipse at left,rgba(245,158,11,0.12),transparent 70%);opacity:1}
+.det-row.fired-yellow .det-scan{animation:scan-sweep 2s ease-in-out infinite;background:linear-gradient(90deg,transparent,rgba(245,158,11,0.12),transparent)}
+
+.det-row.fired-purple{border-color:rgba(139,92,246,0.5);background:rgba(139,92,246,0.06);animation:det-alarm 0.4s ease}
+.det-row.fired-purple .det-glow{background:radial-gradient(ellipse at left,rgba(139,92,246,0.12),transparent 70%);opacity:1}
+.det-row.fired-purple .det-scan{animation:scan-sweep 2s ease-in-out infinite;background:linear-gradient(90deg,transparent,rgba(139,92,246,0.12),transparent)}
+
+.det-row.fired-cyan{border-color:rgba(6,182,212,0.5);background:rgba(6,182,212,0.06);animation:det-alarm 0.4s ease}
+.det-row.fired-cyan .det-glow{background:radial-gradient(ellipse at left,rgba(6,182,212,0.12),transparent 70%);opacity:1}
+.det-row.fired-cyan .det-scan{animation:scan-sweep 2s ease-in-out infinite;background:linear-gradient(90deg,transparent,rgba(6,182,212,0.12),transparent)}
+
+@keyframes scan-sweep{0%{left:-100%}100%{left:100%}}
+@keyframes det-alarm{0%{transform:scale(1)}30%{transform:scale(1.015)}60%{transform:scale(.995)}100%{transform:scale(1)}}
+
+.det-left{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+.det-dot{width:8px;height:8px;border-radius:50%;background:var(--border-2);transition:all .3s;flex-shrink:0;position:relative}
+.det-dot::after{content:'';position:absolute;inset:-4px;border-radius:50%;border:1.5px solid currentColor;opacity:0;transition:opacity .3s;animation:none}
+
+.det-row.fired-red .det-dot{background:var(--red);color:var(--red);box-shadow:0 0 10px var(--red)}
+.det-row.fired-red .det-dot::after{opacity:.6;animation:ring 1.5s ease-out infinite}
+.det-row.fired-yellow .det-dot{background:var(--yellow);color:var(--yellow);box-shadow:0 0 10px var(--yellow)}
+.det-row.fired-yellow .det-dot::after{opacity:.6;animation:ring 1.5s ease-out infinite}
+.det-row.fired-purple .det-dot{background:var(--purple);color:var(--purple);box-shadow:0 0 10px var(--purple)}
+.det-row.fired-purple .det-dot::after{opacity:.6;animation:ring 1.5s ease-out infinite}
+.det-row.fired-cyan .det-dot{background:var(--cyan);color:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+.det-row.fired-cyan .det-dot::after{opacity:.6;animation:ring 1.5s ease-out infinite}
+
+.det-name{font-size:12px;font-weight:500;position:relative;z-index:1}
+.det-desc{font-size:10px;color:var(--text-3);margin-top:1px;position:relative;z-index:1}
+.det-pts{font-family:'Space Mono',monospace;font-size:11px;color:var(--text-3);position:relative;z-index:1;transition:all .3s}
+.det-row.fired-red .det-pts{color:var(--red);font-weight:700}
+.det-row.fired-yellow .det-pts{color:var(--yellow);font-weight:700}
+.det-row.fired-purple .det-pts{color:var(--purple);font-weight:700}
+.det-row.fired-cyan .det-pts{color:var(--cyan);font-weight:700}
+
+/* ALERT BADGE */
+.det-badge{display:none;font-size:9px;font-family:'Space Mono',monospace;padding:2px 7px;border-radius:4px;font-weight:700;letter-spacing:.5px;position:relative;z-index:1}
+.det-row.fired-red .det-badge{display:inline-block;background:rgba(239,68,68,0.2);color:var(--red);border:1px solid rgba(239,68,68,0.4)}
+.det-row.fired-yellow .det-badge{display:inline-block;background:rgba(245,158,11,0.2);color:var(--yellow);border:1px solid rgba(245,158,11,0.4)}
+.det-row.fired-purple .det-badge{display:inline-block;background:rgba(139,92,246,0.2);color:var(--purple);border:1px solid rgba(139,92,246,0.4)}
+.det-row.fired-cyan .det-badge{display:inline-block;background:rgba(6,182,212,0.2);color:var(--cyan);border:1px solid rgba(6,182,212,0.4)}
+
+/* RISK */
+.risk-section{margin-top:18px}
+.risk-header{display:flex;justify-content:space-between;font-size:11px;font-family:'Space Mono',monospace;color:var(--text-3);margin-bottom:8px}
+.risk-track{height:5px;background:var(--bg-4);border-radius:3px;overflow:hidden}
+.risk-bar{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--green),var(--green-2));width:0%;transition:width .6s cubic-bezier(.25,.46,.45,.94),background .3s}
+.risk-footer{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.risk-lbl{font-size:11px;font-family:'Space Mono',monospace;color:var(--green);transition:color .3s;font-weight:700;letter-spacing:1px}
+
+/* TRIGGERS */
+.trigger-list{display:flex;flex-direction:column;gap:6px;margin-top:18px}
+.trigger-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:8px;background:var(--bg-3);border:1px solid var(--border);transition:all .2s}
+.trigger-item:hover{border-color:var(--border-2)}
+.trigger-item.t-fired{background:rgba(239,68,68,0.14);border-color:rgba(239,68,68,0.6);box-shadow:0 0 14px rgba(239,68,68,0.3)}
+.trigger-item.t-fired .t-name{color:var(--red);font-weight:700}
+.trigger-item.t-fired .t-tag{color:var(--red);border-color:rgba(239,68,68,0.6)}
+.t-name{font-size:12px;color:var(--text-2)}
+.t-tag{font-size:9px;font-family:'Space Mono',monospace;color:var(--text-3);letter-spacing:1px;padding:2px 7px;border-radius:4px;border:1px solid var(--border);background:var(--bg-4)}
+
+/* LOG */
+.log-panel{background:var(--bg-2);border:1px solid var(--border);border-radius:20px;padding:24px;margin-bottom:16px;animation:fade-up .8s .45s ease both}
+.log-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.log-stream{height:180px;overflow-y:auto;font-family:'Space Mono',monospace;font-size:11px;line-height:2}
+.log-stream::-webkit-scrollbar{width:3px}
+.log-stream::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:2px}
+.log-entry{display:flex;gap:14px}
+.log-time{color:var(--text-3);flex-shrink:0}
+.c-ok{color:var(--green-2)}.c-err{color:var(--red)}.c-inf{color:var(--cyan)}.c-wrn{color:var(--yellow)}
+.clr-btn{background:none;border:1px solid var(--border);color:var(--text-3);font-size:10px;font-family:'Space Mono',monospace;padding:4px 10px;border-radius:6px;cursor:pointer;transition:all .15s;letter-spacing:.5px}
+.clr-btn:hover{color:var(--text);border-color:var(--border-2)}
+
+/* METRICS */
+.metrics-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;animation:fade-up .8s .6s ease both}
+.metric-card{background:var(--bg-2);border:1px solid var(--border);border-radius:16px;padding:20px;transition:transform .2s,border-color .2s}
+.metric-card:hover{transform:translateY(-2px);border-color:var(--border-2)}
+.metric-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.metric-name{font-size:12px;font-weight:500;color:var(--text-2)}
+.metric-icon{font-size:18px;opacity:.6}
+.metric-val{font-size:24px;font-weight:700;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.metric-bar-wrap{margin-top:12px}
+.metric-bar-bg{height:3px;background:var(--bg-4);border-radius:2px}
+.metric-bar-fill{height:100%;border-radius:2px;transition:width 1s cubic-bezier(.25,.46,.45,.94)}
+
+/* TELEGRAM PANEL */
+.telegram-panel{background:var(--bg-2);border:1px solid var(--border);border-radius:20px;padding:24px;margin-bottom:16px;animation:fade-up .8s .35s ease both}
+.tg-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.tg-feed{display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto}
+.tg-feed::-webkit-scrollbar{width:3px}
+.tg-feed::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:2px}
+.tg-msg{background:var(--bg-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;animation:tg-slide-in .3s ease}
+@keyframes tg-slide-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.tg-msg.alert{border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.04)}
+.tg-msg-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.tg-icon{font-size:14px}
+.tg-label{font-size:11px;font-weight:600;color:var(--red)}
+.tg-time{margin-left:auto;font-size:10px;font-family:'Space Mono',monospace;color:var(--text-3)}
+.tg-body{font-size:11px;font-family:'Space Mono',monospace;color:var(--text-2);line-height:1.6}
+.tg-empty{font-size:12px;color:var(--text-3);font-family:'Space Mono',monospace;text-align:center;padding:20px}
+
+/* TOAST */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(12px);background:linear-gradient(135deg,var(--accent),var(--purple));color:white;padding:9px 20px;border-radius:999px;font-size:12px;font-weight:600;opacity:0;transition:all .25s;pointer-events:none;z-index:9999;letter-spacing:-.2px}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@keyframes count-up{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.counting{animation:count-up .25s ease}
+@media(max-width:768px){.stat-ribbon{grid-template-columns:repeat(2,1fr)}.grid-2{grid-template-columns:1fr}.metrics-row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="bg-canvas">
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+  <div class="bg-orb orb-3"></div>
+  <div class="bg-grid"></div>
+</div>
+
+<!-- OFFLINE MODAL -->
+<div class="offline-modal" id="offline-modal" onclick="if(event.target===this)closeModal()">
+  <div class="offline-box">
+    <div class="offline-box-top">
+      <div class="offline-icon">⚠️</div>
+      <div>
+        <div class="offline-title">서버 오프라인</div>
+        <div class="offline-sub">진단 점검 결과</div>
+      </div>
+    </div>
+    <div class="offline-checks" id="offline-checks">
+      <div class="check-row"><div class="check-dot checking" id="chk-dot-server"></div><div class="check-label">FastAPI 서버</div><div class="check-status checking" id="chk-server">확인 중…</div></div>
+      <div class="check-row"><div class="check-dot checking" id="chk-dot-redis"></div><div class="check-label">Redis 연결</div><div class="check-status checking" id="chk-redis">확인 중…</div></div>
+      <div class="check-row"><div class="check-dot checking" id="chk-dot-sched"></div><div class="check-label">스케줄러</div><div class="check-status checking" id="chk-sched">확인 중…</div></div>
+    </div>
+    <div class="offline-hint" id="offline-hint">
+      다음 명령으로 해결하세요:<br><br>
+      <code>docker start my-redis</code><br>
+      <code>py -m uvicorn main:app --reload</code>
+    </div>
+    <button class="close-modal" onclick="closeModal()">닫기</button>
+  </div>
+</div>
+
+<div class="shell">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div style="width:36px"></div>
+    <div class="topbar-right">
+      <div class="status-chip" id="status-chip" onclick="onStatusClick()"><div class="pulse-ring"></div><span id="status-txt">연결 중…</span></div>
+      <button class="icon-btn" id="theme-btn">◐</button>
+    </div>
+  </div>
+
+  <!-- HERO -->
+  <div class="hero">
+    <h1><span class="grad">자동 소멸</span><br>토큰 시스템</h1>
+    <p class="hero-sub">유출 후 몇 초 안에 자동으로 무효화되는 API 자격 증명 — 제로 퍼시스턴스(Zero-Persistence) 아키텍처 기반.</p>
+  </div>
+
+  <!-- TICKER -->
+  <div class="threat-ticker">
+    <div class="ticker-label">실시간 피드</div>
+    <div class="ticker-track"><div class="ticker-inner">
+      <span class="ticker-item">시스템 <span>온라인</span></span>
+      <span class="ticker-item">Redis <span>연결됨</span></span>
+      <span class="ticker-item">Zero-Persistence <span>활성</span></span>
+      <span class="ticker-item">스케줄러 <span>작동 중</span></span>
+      <span class="ticker-item">탐지기 4개 <span>무장</span></span>
+      <span class="ticker-item">소멸 트리거 5개 <span>준비됨</span></span>
+      <span class="ticker-item">Telegram 알림 <span>활성</span></span>
+      <span class="ticker-item">시스템 <span>온라인</span></span>
+      <span class="ticker-item">Redis <span>연결됨</span></span>
+      <span class="ticker-item">Zero-Persistence <span>활성</span></span>
+      <span class="ticker-item">스케줄러 <span>작동 중</span></span>
+      <span class="ticker-item">탐지기 4개 <span>무장</span></span>
+      <span class="ticker-item">소멸 트리거 5개 <span>준비됨</span></span>
+      <span class="ticker-item">Telegram 알림 <span>활성</span></span>
+    </div></div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stat-ribbon">
+    <div class="stat-card"><div class="stat-icon">🔑</div><div class="stat-label">활성 토큰</div><div class="stat-num" id="s-tokens">—</div><div class="stat-meta">Redis 메모리 내</div></div>
+    <div class="stat-card"><div class="stat-icon">📡</div><div class="stat-label">요청 수</div><div class="stat-num" id="s-req">0</div><div class="stat-meta">이번 세션</div></div>
+    <div class="stat-card"><div class="stat-icon">🛡️</div><div class="stat-label">차단됨</div><div class="stat-num" id="s-blocked" style="color:var(--red)">0</div><div class="stat-meta">차단된 공격</div></div>
+    <div class="stat-card"><div class="stat-icon">⏱️</div><div class="stat-label">가동 시간</div><div class="stat-num" id="s-uptime" style="color:var(--green)">00:00</div><div class="stat-meta">시 : 분</div></div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="grid-2">
+    <!-- Token Ops -->
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">토큰 작업</div><div class="panel-chip">REST API</div></div>
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('issue')">발급</button>
+        <button class="tab-btn" onclick="switchTab('validate')">검증</button>
+        <button class="tab-btn" onclick="switchTab('revoke')">취소</button>
+        <button class="tab-btn" onclick="switchTab('attack')">공격</button>
+      </div>
+      <div class="tab-pane active" id="tp-issue">
+        <div class="f-group"><label class="f-label">사용자 ID</label><input class="f-input" id="uid" value="alice" placeholder="식별자"></div>
+        <div class="f-group"><label class="f-label">최대 사용 횟수</label><input class="f-input" id="uses" type="number" value="10" min="1"></div>
+        <div class="f-group"><label class="f-label">TTL (초)</label><input class="f-input" id="ttl" type="number" value="300" min="1"></div>
+        <button class="act-btn btn-primary" onclick="issueToken()">토큰 발급 →</button>
+        <div class="out-box" id="out-issue">요청 대기 중…</div>
+        <div class="tok-box" id="tok-box" onclick="copyTok()"></div>
+      </div>
+      <div class="tab-pane" id="tp-validate">
+        <div class="f-group"><label class="f-label">토큰</label><textarea class="f-input" id="val-tok" rows="4" placeholder="eyJ…" style="resize:vertical;font-size:10px;"></textarea></div>
+        <button class="act-btn btn-success" onclick="validateToken()">토큰 검증 →</button>
+        <div class="out-box" id="out-validate">요청 대기 중…</div>
+      </div>
+      <div class="tab-pane" id="tp-revoke">
+        <div class="f-group"><label class="f-label">JTI</label><input class="f-input" id="rev-jti" placeholder="토큰 ID"></div>
+        <div class="f-group"><label class="f-label">관리자 비밀번호</label><input class="f-input" id="rev-pass" type="password" value="admin123"></div>
+        <button class="act-btn btn-danger" onclick="revokeToken()">⚡ 토큰 취소</button>
+        <div class="out-box" id="out-revoke">요청 대기 중…</div>
+      </div>
+      <div class="tab-pane" id="tp-attack">
+        <div class="atk-grid">
+          <button class="btn-attack" id="atk-btn-stolen" onclick="runAttack('stolen')"><input type="checkbox" class="atk-check" id="atk-chk-stolen" onclick="atkToggleSel(event,'stolen')">① 탈취된 토큰<br><span style="opacity:.6;font-weight:400">Context Drift</span></button>
+          <button class="btn-attack" id="atk-btn-forge" onclick="runAttack('forge')"><input type="checkbox" class="atk-check" id="atk-chk-forge" onclick="atkToggleSel(event,'forge')">② 위조된 토큰<br><span style="opacity:.6;font-weight:400">JWT 위조</span></button>
+          <button class="btn-attack" id="atk-btn-replay" onclick="runAttack('replay')"><input type="checkbox" class="atk-check" id="atk-chk-replay" onclick="atkToggleSel(event,'replay')">③ Replay 공격<br><span style="opacity:.6;font-weight:400">소멸된 토큰 재사용</span></button>
+          <button class="btn-attack" id="atk-btn-scan" onclick="runAttack('scan')"><input type="checkbox" class="atk-check" id="atk-chk-scan" onclick="atkToggleSel(event,'scan')">④ 스캔 + 고속 공격<br><span style="opacity:.6;font-weight:400">High Risk</span></button>
+          <button class="btn-attack" id="atk-btn-brute" onclick="runAttack('brute')"><input type="checkbox" class="atk-check" id="atk-chk-brute" onclick="atkToggleSel(event,'brute')">⑤ 관리자 비밀번호<br><span style="opacity:.6;font-weight:400">Brute Force</span></button>
+          <button class="btn-attack" id="atk-btn-flood" onclick="runAttack('flood')"><input type="checkbox" class="atk-check" id="atk-chk-flood" onclick="atkToggleSel(event,'flood')">⑥ Flood / DoS<br><span style="opacity:.6;font-weight:400">Rate Limit</span></button>
+        </div>
+        <div class="atk-sel-row">
+          <label><input type="checkbox" id="atk-chk-all" onclick="atkToggleSelAll(event)"> 전체 선택</label>
+          <span style="opacity:.6">— 각각 체크한 뒤 아래 버튼으로 하나씩 순서대로 실행합니다 (위험도가 점차 상승)</span>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:4px">
+          <button class="act-btn btn-danger" id="atk-btn-all" style="flex:1" onclick="runSelectedAttacks()">😈 선택한 공격 하나씩 실행</button>
+          <button class="act-btn" style="flex:0 0 auto;width:auto;padding:11px 14px;background:var(--bg-3);border:1px solid var(--border);color:var(--text-2)" onclick="resetDemoState()">🔄 초기화</button>
+        </div>
+        <div class="atk-console" id="atk-console">위 공격 중 체크박스로 선택하거나, 버튼을 바로 눌러 하나를 즉시 실행하세요…</div>
+      </div>
+    </div>
+
+    <!-- Security Monitor -->
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">보안 모니터</div><div class="panel-chip">LIVE</div></div>
+      <div class="det-grid">
+        <div class="det-row" id="d-replay">
+          <div class="det-glow"></div><div class="det-scan"></div>
+          <div class="det-left"><div class="det-dot"></div><div><div class="det-name">Replay 공격</div><div class="det-desc">jti 재사용 탐지</div></div></div>
+          <div style="display:flex;align-items:center;gap:8px"><div class="det-badge">감지됨</div><div class="det-pts">+30</div></div>
+        </div>
+        <div class="det-row" id="d-velocity">
+          <div class="det-glow"></div><div class="det-scan"></div>
+          <div class="det-left"><div class="det-dot"></div><div><div class="det-name">속도 폭주</div><div class="det-desc">초당 10개 이상 요청</div></div></div>
+          <div style="display:flex;align-items:center;gap:8px"><div class="det-badge">감지됨</div><div class="det-pts">+40</div></div>
+        </div>
+        <div class="det-row" id="d-geo">
+          <div class="det-glow"></div><div class="det-scan"></div>
+          <div class="det-left"><div class="det-dot"></div><div><div class="det-name">물리적 불가능 이동</div><div class="det-desc">물리적으로 불가능한 이동 속도</div></div></div>
+          <div style="display:flex;align-items:center;gap:8px"><div class="det-badge">감지됨</div><div class="det-pts">+50</div></div>
+        </div>
+        <div class="det-row" id="d-enum">
+          <div class="det-glow"></div><div class="det-scan"></div>
+          <div class="det-left"><div class="det-dot"></div><div><div class="det-name">엔드포인트 열거</div><div class="det-desc">404 경로 탐색</div></div></div>
+          <div style="display:flex;align-items:center;gap:8px"><div class="det-badge">감지됨</div><div class="det-pts">+35</div></div>
+        </div>
+      </div>
+      <div class="risk-section">
+        <div class="risk-header"><span>위험 점수</span><span id="risk-val">0 / 100</span></div>
+        <div class="risk-track"><div class="risk-bar" id="risk-bar"></div></div>
+        <div class="risk-footer"><span style="font-size:10px;color:var(--text-3);font-family:'Space Mono',monospace">LOW · MEDIUM · HIGH</span><div class="risk-lbl" id="risk-lbl">LOW</div></div>
+      </div>
+      <div class="trigger-list">
+        <div class="trigger-item" id="trig-ttl"><span class="t-name">① TTL 만료</span><span class="t-tag">REDIS 자동</span></div>
+        <div class="trigger-item" id="trig-ctx"><span class="t-name">② 컨텍스트 변경</span><span class="t-tag">IP 변경</span></div>
+        <div class="trigger-item" id="trig-max"><span class="t-name">③ 최대 사용</span><span class="t-tag">사용 횟수</span></div>
+        <div class="trigger-item" id="trig-high"><span class="t-name">④ 고위험</span><span class="t-tag" style="color:var(--red);border-color:rgba(239,68,68,0.3)">이상 탐지</span></div>
+        <div class="trigger-item" id="trig-admin"><span class="t-name">⑤ 관리자 취소</span><span class="t-tag" style="color:var(--yellow);border-color:rgba(245,158,11,0.3)">수동</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TELEGRAM FEED -->
+  <div class="telegram-panel">
+    <div class="tg-head">
+      <div class="panel-title"> Telegram 알림 피드</div>
+      <div class="panel-chip">AUTO</div>
+    </div>
+    <div class="tg-feed" id="tg-feed">
+      <div class="tg-empty" id="tg-empty">아직 알림 없음 — 시스템 정상 ✓</div>
+    </div>
+  </div>
+
+  <!-- LOG -->
+  <div class="log-panel">
+    <div class="log-head"><div class="panel-title">이벤트 로그</div><button class="clr-btn" onclick="clearLog()">지우기</button></div>
+    <div class="log-stream" id="log"><div class="log-entry"><span class="log-time">--:--:--</span><span class="c-inf">시스템 초기화됨 · 준비 완료</span></div></div>
+  </div>
+
+  <!-- METRICS -->
+  <div class="metrics-row">
+    <div class="metric-card"><div class="metric-top"><div class="metric-name">테스트 커버리지</div><div class="metric-icon">✅</div></div><div class="metric-val" style="color:var(--green)">81%</div><div class="metric-bar-wrap"><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:81%;background:linear-gradient(90deg,var(--green),var(--green-2))"></div></div></div><div style="font-size:11px;color:var(--text-3);margin-top:8px;font-family:'Space Mono',monospace">41/41 테스트 통과</div></div>
+    <div class="metric-card"><div class="metric-top"><div class="metric-name">보안 점수</div><div class="metric-icon">🛡️</div></div><div class="metric-val" style="color:var(--cyan)">A+</div><div class="metric-bar-wrap"><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:92%;background:linear-gradient(90deg,var(--cyan),var(--accent))"></div></div></div><div style="font-size:11px;color:var(--text-3);margin-top:8px;font-family:'Space Mono',monospace">OWASP ZAP — 심각 0건</div></div>
+    <div class="metric-card"><div class="metric-top"><div class="metric-name">아키텍처</div><div class="metric-icon">⚡</div></div><div class="metric-val" style="color:var(--purple)">5L</div><div class="metric-bar-wrap"><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:100%;background:linear-gradient(90deg,var(--purple),var(--accent-2))"></div></div></div><div style="font-size:11px;color:var(--text-3);margin-top:8px;font-family:'Space Mono',monospace">5계층 · 6단계 검증</div></div>
+  </div>
+</div>
+
+<div class="toast" id="toast">클립보드에 복사됨</div>
+
+<script>
+const API='http://localhost:8000';
+let reqCount=0,blocked=0,lastToken='',startTime=Date.now();
+let lastStatus='unknown';
+
+// THEME
+const html=document.documentElement;
+html.setAttribute('data-theme',localStorage.getItem('zp-theme')||'dark');
+document.getElementById('theme-btn').addEventListener('click',()=>{
+  const next=html.getAttribute('data-theme')==='dark'?'light':'dark';
+  html.setAttribute('data-theme',next);localStorage.setItem('zp-theme',next);
+});
+
+// UPTIME
+setInterval(()=>{
+  const s=Math.floor((Date.now()-startTime)/1000);
+  document.getElementById('s-uptime').textContent=String(Math.floor(s/3600)).padStart(2,'0')+':'+String(Math.floor((s%3600)/60)).padStart(2,'0');
+},1000);
+
+// HEALTH POLL
+async function health(){
+  const chip=document.getElementById('status-chip');
+  const txt=document.getElementById('status-txt');
+  try{
+    const r=await fetch(`${API}/health`,{signal:AbortSignal.timeout(4000)});
+    const d=await r.json();
+    const ok=d.status==='ok';
+    chip.className=`status-chip ${ok?'online':'offline'}`;
+    txt.textContent=ok?'시스템 온라인':'성능 저하';
+    lastStatus=ok?'online':'degraded';
+    window._healthData=d;
+  }catch(e){
+    chip.className='status-chip offline';
+    txt.textContent='오프라인 — 클릭하여 진단';
+    lastStatus='offline';
+    window._healthData=null;
+  }
+}
+health();setInterval(health,8000);
+
+// LIVE STATS POLL — Active Tokens from /admin/stats
+async function pollStats(){
+  try{
+    const r=await fetch(`${API}/admin/stats`,{headers:{'Authorization':'Basic '+btoa('admin:admin123')},signal:AbortSignal.timeout(4000)});
+    if(r.ok){const d=await r.json();const el=document.getElementById('s-tokens');if(el)el.textContent=d.active_tokens;}
+  }catch(e){}
+}
+pollStats();setInterval(pollStats,3000);
+
+// LIVE COUNTERS — driven by server events so auto-traffic moves them too
+function countFromLog(m){
+  if(/^(Token (issued|valid|rejected)|Admin revoked)/.test(m)){reqCount++;animate('s-req',reqCount);}
+  if(/^Token rejected/.test(m)){blocked++;animate('s-blocked',blocked);}
+}
+
+// DESTRUCT TRIGGERS — 서버 로그 메시지로 어떤 소멸 조건이 작동했는지 인식해 6초간 점등
+const _trigTimers={};
+function fireTrigger(id){
+  const el=document.getElementById(id); if(!el) return;
+  el.classList.add('t-fired');
+  if(_trigTimers[id]) clearTimeout(_trigTimers[id]);
+  _trigTimers[id]=setTimeout(()=>el.classList.remove('t-fired'),6000);
+}
+function triggerFromLog(m){
+  if(/context_drift/.test(m)) fireTrigger('trig-ctx');
+  else if(/high_risk/.test(m)) fireTrigger('trig-high');
+  else if(/max_uses/.test(m)||/uses left: 0\b/.test(m)) fireTrigger('trig-max');
+  else if(/^Admin revoked/.test(m)) fireTrigger('trig-admin');
+}
+
+// OFFLINE MODAL
+function onStatusClick(){
+  if(lastStatus==='online')return;
+  document.getElementById('offline-modal').classList.add('show');
+  runDiagnostics();
+}
+
+function closeModal(){
+  document.getElementById('offline-modal').classList.remove('show');
+}
+
+async function runDiagnostics(){
+  // Reset
+  ['server','redis','sched'].forEach(k=>{
+    document.getElementById(`chk-dot-${k}`).className='check-dot checking';
+    document.getElementById(`chk-${k}`).className='check-status checking';
+    document.getElementById(`chk-${k}`).textContent='확인 중…';
+  });
+
+  // Try server
+  try{
+    const r=await fetch(`${API}/health`,{signal:AbortSignal.timeout(3000)});
+    const d=await r.json();
+    setCheck('server','ok','작동 중 ✓');
+    setCheck('redis',d.redis==='connected'?'ok':'fail',d.redis==='connected'?'연결됨 ✓':'연결 안 됨 ✗');
+    setCheck('sched',d.scheduler==='running'?'ok':'fail',d.scheduler==='running'?'작동 중 ✓':'중지됨 ✗');
+
+    const hint=document.getElementById('offline-hint');
+    if(d.redis!=='connected'){
+      hint.innerHTML='Redis가 실행되지 않았습니다. 해결:<br><br><code>docker start my-redis</code><br><br>또는:<br><br><code>docker run -d --name my-redis -p 6379:6379 redis:alpine</code>';
+    } else if(d.scheduler!=='running'){
+      hint.innerHTML='스케줄러가 중지되었습니다. 서버를 재시작하세요:<br><br><code>py -m uvicorn main:app --reload</code>';
+    } else {
+      hint.innerHTML='서버는 실행 중이나 성능이 저하되었습니다. 터미널에서 오류를 확인하세요.';
+    }
+  }catch{
+    setCheck('server','fail','연결 불가 ✗');
+    setCheck('redis','fail','알 수 없음 ✗');
+    setCheck('sched','fail','알 수 없음 ✗');
+    document.getElementById('offline-hint').innerHTML=
+      '서버가 실행되지 않았습니다. 시작하세요:<br><br>'+
+      '<code>docker start my-redis</code><br>'+
+      '<code>py -m uvicorn main:app --reload</code>';
+  }
+}
+
+function setCheck(key,status,text){
+  document.getElementById(`chk-dot-${key}`).className=`check-dot ${status}`;
+  document.getElementById(`chk-${key}`).className=`check-status ${status}`;
+  document.getElementById(`chk-${key}`).textContent=text;
+}
+
+// TABS
+function switchTab(name){
+  const names=['issue','validate','revoke','attack'];
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',names[i]===name));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById(`tp-${name}`).classList.add('active');
+}
+
+// LOG
+function log(msg,type='inf'){
+  const el=document.getElementById('log');
+  const t=new Date().toTimeString().slice(0,8);
+  const row=document.createElement('div');
+  row.className='log-entry';
+  row.innerHTML=`<span class="log-time">${t}</span><span class="c-${type}">${msg}</span>`;
+  el.appendChild(row);el.scrollTop=el.scrollHeight;
+}
+function clearLog(){document.getElementById('log').innerHTML='';log('로그 지움');}
+
+// TELEGRAM FEED
+function addTelegramAlert(event,ip,score,reasons){
+  const feed=document.getElementById('tg-feed');
+  const empty=document.getElementById('tg-empty');
+  if(empty)empty.remove();
+  const t=new Date().toTimeString().slice(0,8);
+  const div=document.createElement('div');
+  div.className='tg-msg alert';
+  div.innerHTML=`
+    <div class="tg-msg-top">
+      <span class="tg-icon">🚨</span>
+      <span class="tg-label">보안 경고</span>
+      <span class="tg-time">${t}</span>
+    </div>
+    <div class="tg-body">이벤트: ${event}\nIP: ${ip}\n위험 점수: ${score} (HIGH)\n사유: ${reasons.join(', ')}\n조치: 토큰 소멸됨</div>`;
+  feed.insertBefore(div,feed.firstChild);
+}
+
+// ISSUE
+async function issueToken(){
+  const uid=document.getElementById('uid').value.trim()||'user';
+  const uses=parseInt(document.getElementById('uses').value)||10;
+  const ttl=parseInt(document.getElementById('ttl').value)||300;
+  const out=document.getElementById('out-issue');
+  const box=document.getElementById('tok-box');
+  out.className='out-box';out.textContent='발급 중…';box.style.display='none';
+  try{
+    const r=await fetch(`${API}/request-token`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,max_uses:uses,ttl:ttl})});
+    const d=await r.json();
+    if(r.ok){
+      lastToken=d.token;
+      out.className='out-box ok';
+      out.textContent=`✓ 토큰 발급됨\nJTI: ${d.jti}\n만료: ${d.expires_in}초 · 최대 사용: ${uses}회`;
+      box.style.display='block';box.textContent=d.token;
+      document.getElementById('val-tok').value=d.token;
+      document.getElementById('rev-jti').value=d.jti;
+      log(`토큰 발급 — ${uid} — ${d.jti.slice(0,8)}…`,'ok');
+    }else{out.className='out-box err';out.textContent=`✗ ${JSON.stringify(d,null,2)}`;log('발급 실패','err');}
+  }catch{out.className='out-box err';out.textContent='✗ 서버에 연결할 수 없습니다';log('연결 오류','err');}
+}
+
+// VALIDATE
+async function validateToken(){
+  const token=document.getElementById('val-tok').value.trim();
+  const out=document.getElementById('out-validate');
+  if(!token){out.textContent='먼저 토큰을 붙여넣으세요';return;}
+  out.className='out-box';out.textContent='검증 중…';
+  try{
+    const r=await fetch(`${API}/validate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
+    const d=await r.json();
+    if(r.ok){
+      out.className='out-box ok';
+      out.textContent=`✓ 토큰 유효함\n남은 횟수: ${d.uses_left}\n위험도: ${d.risk?.level||'LOW'} (${d.risk?.score||0})`;
+      updateRisk(d.risk?.score||0,d.risk?.level||'LOW',d.risk?.reasons||[]);
+      log(`검증됨 · 남은 횟수: ${d.uses_left}`,'ok');
+    }else{
+      out.className='out-box err';
+      const detail=d.detail||d;
+      out.textContent=`✗ 토큰 무효\n${JSON.stringify(detail,null,2)}`;
+      // HIGH risk인 경우 Telegram 피드에도 표시
+      if(detail?.reason==='high_risk_detected'&&detail?.risk){
+        const risk=detail.risk;
+        updateRisk(risk.score,risk.level,risk.reasons||[]);
+        addTelegramAlert('Anomaly HIGH Risk','127.0.0.1',risk.score,risk.reasons||[]);
+      }
+      log('검증 거부됨','err');
+    }
+  }catch{out.className='out-box err';out.textContent='✗ 연결 오류';}
+}
+
+// REVOKE
+async function revokeToken(){
+  const jti=document.getElementById('rev-jti').value.trim();
+  const pass=document.getElementById('rev-pass').value;
+  const out=document.getElementById('out-revoke');
+  if(!jti){out.textContent='먼저 JTI를 입력하세요';return;}
+  out.className='out-box';out.textContent='취소 중…';
+  try{
+    const r=await fetch(`${API}/admin/revoke/${jti}`,{method:'DELETE',headers:{'Authorization':'Basic '+btoa(`admin:${pass}`)}});
+    const d=await r.json();
+    if(r.ok){out.className='out-box ok';out.textContent=`✓ 취소됨\n${d.message}`;log(`관리자 취소 · ${jti.slice(0,8)}…`,'wrn');}
+    else{out.className='out-box err';out.textContent=`✗ ${JSON.stringify(d,null,2)}`;}
+  }catch{out.className='out-box err';out.textContent='✗ 연결 오류';}
+}
+
+// ATTACK SIMULATOR — 각 버튼이 실제 HTTP 요청으로 서버를 공격하므로
+// Security Monitor / Event Log / Telegram Feed가 실제로 반응합니다.
+const ATK_BUTTONS=['stolen','forge','replay','scan','brute','flood'];
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function atkSetBusy(busy){
+  ATK_BUTTONS.forEach(n=>{const b=document.getElementById(`atk-btn-${n}`);if(b)b.disabled=busy;});
+  const all=document.getElementById('atk-btn-all');if(all)all.disabled=busy;
+}
+function atkLine(text,who){
+  const box=document.getElementById('atk-console');
+  const d=document.createElement('div');
+  d.className=`atk-line-${who||'system'}`;
+  const prefix=who==='hacker'?'😈 ':who==='victim'?'👤 ':'🛡️ ';
+  d.textContent=prefix+text;
+  box.appendChild(d);
+  box.scrollTop=box.scrollHeight;
+}
+async function runAttack(name,clear=true){
+  const box=document.getElementById('atk-console');
+  if(clear)box.innerHTML='';
+  atkLine(`— ${name.toUpperCase()} 공격 시작 —`,'system');
+  atkSetBusy(true);
+  try{
+    const r=await fetch(`${API}/demo/attack/${name}?lang=ko`,{method:'POST'});
+    const d=await r.json();
+    if(!r.ok){atkLine('✗ 오류: '+JSON.stringify(d),'system');return;}
+    for(const step of d.steps){
+      await sleep(450);
+      atkLine(step.text,step.who);
+    }
+  }catch{atkLine('✗ 서버에 연결할 수 없습니다','system');}
+  finally{atkSetBusy(false);}
+}
+function atkToggleSel(event,name){
+  event.stopPropagation();
+  const chk=document.getElementById(`atk-chk-${name}`);
+  const btn=document.getElementById(`atk-btn-${name}`);
+  if(btn)btn.classList.toggle('selected',chk.checked);
+  const all=document.getElementById('atk-chk-all');
+  if(all)all.checked=ATK_BUTTONS.every(n=>document.getElementById(`atk-chk-${n}`).checked);
+}
+function atkToggleSelAll(event){
+  const checked=event.target.checked;
+  ATK_BUTTONS.forEach(n=>{
+    const chk=document.getElementById(`atk-chk-${n}`);
+    const btn=document.getElementById(`atk-btn-${n}`);
+    if(chk)chk.checked=checked;
+    if(btn)btn.classList.toggle('selected',checked);
+  });
+}
+async function runSelectedAttacks(){
+  const box=document.getElementById('atk-console');
+  const selected=ATK_BUTTONS.filter(n=>document.getElementById(`atk-chk-${n}`)?.checked);
+  if(selected.length===0){
+    box.innerHTML='';
+    atkLine('⚠ 먼저 체크박스로 공격을 최소 1개 선택하세요','system');
+    return;
+  }
+  box.innerHTML='';
+  atkLine(`선택한 ${selected.length}개 공격을 하나씩 순서대로 실행합니다 — 위험도가 점차 상승합니다…`,'system');
+  for(const name of selected){
+    await runAttack(name,false);
+    atkLine('',  'system');
+    await sleep(700);
+  }
+  atkLine('✅ 선택한 공격이 모두 완료되었습니다 — Risk Score와 Security Monitor를 확인하세요','system');
+}
+async function resetDemoState(){
+  const box=document.getElementById('atk-console');
+  atkLine('카운터를 초기화하는 중…','system');
+  try{
+    const r=await fetch(`${API}/admin/reset-demo`,{method:'POST',headers:{'Authorization':'Basic '+btoa('admin:admin123')}});
+    const d=await r.json();
+    atkLine(r.ok?`✓ ${d.message}`:`✗ ${JSON.stringify(d)}`,'system');
+  }catch{atkLine('✗ 서버에 연결할 수 없습니다','system');}
+}
+
+// RISK + DETECTOR SIGNALS
+const DET_COLORS={
+  replay_attack:{id:'d-replay',cls:'fired-red'},
+  velocity_burst:{id:'d-velocity',cls:'fired-yellow'},
+  geo_impossibility:{id:'d-geo',cls:'fired-purple'},
+  endpoint_enumeration:{id:'d-enum',cls:'fired-cyan'}
+};
+
+// 탐지기 불빛은 켜지면 8초간 유지됨 (여러 공격이 동시에 켜질 수 있음)
+const _detTimers={};
+function fireDetector(key){
+  const d=DET_COLORS[key]; if(!d) return;
+  const el=document.getElementById(d.id); if(!el) return;
+  el.classList.add(d.cls);
+  if(_detTimers[key]) clearTimeout(_detTimers[key]);
+  _detTimers[key]=setTimeout(()=>el.classList.remove('fired-red','fired-yellow','fired-purple','fired-cyan'),8000);
+}
+
+function updateRisk(score,level,reasons){
+  const bar=document.getElementById('risk-bar');
+  const val=document.getElementById('risk-val');
+  const lbl=document.getElementById('risk-lbl');
+  bar.style.width=Math.min(score,100)+'%';
+  val.textContent=`${score} / 100`;
+  lbl.textContent=level;
+  const map={LOW:'var(--green)',MEDIUM:'var(--yellow)',HIGH:'var(--red)'};
+  bar.style.background=map[level]||'var(--green)';
+  lbl.style.color=map[level]||'var(--green)';
+
+  reasons.forEach(reason=>fireDetector(reason.toLowerCase().replace(/ /g,'_')));
+  if(level==='HIGH'&&reasons.length===0){
+    Object.keys(DET_COLORS).forEach(fireDetector);
+  }
+}
+
+function animate(id,val){
+  const el=document.getElementById(id);
+  el.classList.remove('counting');void el.offsetWidth;
+  el.textContent=val;el.classList.add('counting');
+}
+
+// ── SSE REAL-TIME CONNECTION ──────────────────────────────────────────
+function connectSSE() {
+  const es = new EventSource(`${API}/events`);
+
+  es.onmessage = function(e) {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'connected') {
+        log('대시보드가 서버에 연결됨 · 실시간 활성', 'inf');
+      } else if (msg.type === 'log') {
+        log(msg.data.msg, msg.data.level || 'inf');
+        countFromLog(msg.data.msg);
+        triggerFromLog(msg.data.msg);
+      } else if (msg.type === 'telegram_alert') {
+        const d = msg.data;
+        addTelegramAlert(d.event, d.ip, d.score, d.reasons);
+        log(`🚨 HIGH RISK — ${d.reasons.join(', ')} — score: ${d.score}`, 'err');
+      } else if (msg.type === 'detector_fired') {
+        const d = msg.data;
+        updateRisk(d.score, d.level, d.reasons);
+      }
+    } catch(err) {}
+  };
+
+  es.onerror = function() {
+    setTimeout(connectSSE, 3000);
+  };
+}
+
+connectSSE();
+
+function copyTok(){
+  if(!lastToken)return;
+  navigator.clipboard.writeText(lastToken);
+  const t=document.getElementById('toast');
+  t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2000);
+}
+</script>
+</body>
+</html>

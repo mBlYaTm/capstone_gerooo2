@@ -76,6 +76,14 @@ def mark_jti_used(jti: str) -> bool:
     return result is True  # False = аль хэдийн ашигласан = replay attack!
 
 
+def reset_demo_counters() -> None:
+    """Демо хооронд халдлагын тоолуурыг цэвэрлэнэ (enum, velocity, rate limit, replay)."""
+    for pattern in ("enum_paths:*", "velocity:*", "ratelimit:*", "used_jti:*"):
+        keys = list(r.scan_iter(match=pattern))
+        if keys:
+            r.delete(*keys)
+
+
 def ping() -> bool:
     """Redis холболт ажиллаж байгаа эсэхийг шалгана."""
     try:

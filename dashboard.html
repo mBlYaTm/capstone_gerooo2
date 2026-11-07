@@ -122,6 +122,18 @@ body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-ser
 .out-box{margin-top:12px;background:var(--bg-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-family:'Space Mono',monospace;font-size:11px;line-height:1.8;min-height:70px;color:var(--text-3);white-space:pre-wrap;word-break:break-all;transition:all .2s}
 .out-box.ok{border-color:rgba(16,185,129,0.4);color:var(--green-2);background:rgba(16,185,129,0.04)}
 .out-box.err{border-color:rgba(239,68,68,0.4);color:var(--red);background:rgba(239,68,68,0.04)}
+.atk-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+.btn-attack{position:relative;padding:9px 8px 9px 28px;border-radius:8px;border:1px solid rgba(239,68,68,0.35);background:rgba(239,68,68,0.08);color:var(--red);font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;text-align:left}
+.btn-attack:hover{background:rgba(239,68,68,0.18);box-shadow:0 4px 14px rgba(239,68,68,0.2)}
+.btn-attack:disabled{opacity:.5;cursor:wait}
+.btn-attack.selected{border-color:var(--red);background:rgba(239,68,68,0.28);box-shadow:0 0 0 1px var(--red) inset}
+.atk-check{position:absolute;left:7px;top:9px;width:14px;height:14px;accent-color:var(--red);cursor:pointer}
+.atk-sel-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:11px;color:var(--text-3)}
+.atk-sel-row label{display:flex;align-items:center;gap:5px;cursor:pointer}
+.atk-console{margin-top:4px;background:var(--bg-3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-family:'Space Mono',monospace;font-size:11px;line-height:1.9;min-height:200px;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-word;color:var(--text-3)}
+.atk-line-hacker{color:var(--red)}
+.atk-line-victim{color:var(--text-2)}
+.atk-line-system{color:var(--green-2)}
 .tok-box{display:none;margin-top:10px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:10px 14px;font-family:'Space Mono',monospace;font-size:10px;color:var(--accent-2);word-break:break-all;cursor:pointer;position:relative;line-height:1.7;transition:border-color .15s}
 .tok-box:hover{border-color:var(--accent)}
 .tok-box::after{content:'copy';position:absolute;top:8px;right:10px;font-size:9px;color:var(--text-3);letter-spacing:1px}
@@ -334,6 +346,7 @@ body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-ser
         <button class="tab-btn active" onclick="switchTab('issue')">Issue</button>
         <button class="tab-btn" onclick="switchTab('validate')">Validate</button>
         <button class="tab-btn" onclick="switchTab('revoke')">Revoke</button>
+        <button class="tab-btn" onclick="switchTab('attack')">Attack</button>
       </div>
       <div class="tab-pane active" id="tp-issue">
         <div class="f-group"><label class="f-label">User ID</label><input class="f-input" id="uid" value="alice" placeholder="identifier"></div>
@@ -353,6 +366,25 @@ body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-ser
         <div class="f-group"><label class="f-label">Admin Password</label><input class="f-input" id="rev-pass" type="password" value="admin123"></div>
         <button class="act-btn btn-danger" onclick="revokeToken()">⚡ Revoke Token</button>
         <div class="out-box" id="out-revoke">Waiting for request…</div>
+      </div>
+      <div class="tab-pane" id="tp-attack">
+        <div class="atk-grid">
+          <button class="btn-attack" id="atk-btn-stolen" onclick="runAttack('stolen')"><input type="checkbox" class="atk-check" id="atk-chk-stolen" onclick="atkToggleSel(event,'stolen')">① Хулгайлсан токен<br><span style="opacity:.6;font-weight:400">Context Drift</span></button>
+          <button class="btn-attack" id="atk-btn-forge" onclick="runAttack('forge')"><input type="checkbox" class="atk-check" id="atk-chk-forge" onclick="atkToggleSel(event,'forge')">② Хуурамч токен<br><span style="opacity:.6;font-weight:400">JWT forge</span></button>
+          <button class="btn-attack" id="atk-btn-replay" onclick="runAttack('replay')"><input type="checkbox" class="atk-check" id="atk-chk-replay" onclick="atkToggleSel(event,'replay')">③ Replay халдлага<br><span style="opacity:.6;font-weight:400">Устсаныг дахин</span></button>
+          <button class="btn-attack" id="atk-btn-scan" onclick="runAttack('scan')"><input type="checkbox" class="atk-check" id="atk-chk-scan" onclick="atkToggleSel(event,'scan')">④ Скан + хурдан<br><span style="opacity:.6;font-weight:400">High Risk</span></button>
+          <button class="btn-attack" id="atk-btn-brute" onclick="runAttack('brute')"><input type="checkbox" class="atk-check" id="atk-chk-brute" onclick="atkToggleSel(event,'brute')">⑤ Админ нууц үг<br><span style="opacity:.6;font-weight:400">Brute force</span></button>
+          <button class="btn-attack" id="atk-btn-flood" onclick="runAttack('flood')"><input type="checkbox" class="atk-check" id="atk-chk-flood" onclick="atkToggleSel(event,'flood')">⑥ Flood / DoS<br><span style="opacity:.6;font-weight:400">Rate limit</span></button>
+        </div>
+        <div class="atk-sel-row">
+          <label><input type="checkbox" id="atk-chk-all" onclick="atkToggleSelAll(event)"> Бүгдийг сонгох</label>
+          <span style="opacity:.6">— тус бүрийг чагтлаад, доор нэг нэгээр нь дараалж ажиллуулна (эрсдэл аажмаар нэмэгдэнэ)</span>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:4px">
+          <button class="act-btn btn-danger" id="atk-btn-all" style="flex:1" onclick="runSelectedAttacks()">😈 Сонгосныг нэг нэгээр ажиллуулах</button>
+          <button class="act-btn" style="flex:0 0 auto;width:auto;padding:11px 14px;background:var(--bg-3);border:1px solid var(--border);color:var(--text-2)" onclick="resetDemoState()">🔄 Цэвэрлэх</button>
+        </div>
+        <div class="atk-console" id="atk-console">Дээрх халдлагуудаас сонгоод (checkbox), эсвэл товчийг шууд дарж нэгийг нь даруй эхлүүлнэ үү…</div>
       </div>
     </div>
 
@@ -547,7 +579,7 @@ function setCheck(key,status,text){
 
 // TABS
 function switchTab(name){
-  const names=['issue','validate','revoke'];
+  const names=['issue','validate','revoke','attack'];
   document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',names[i]===name));
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
   document.getElementById(`tp-${name}`).classList.add('active');
@@ -647,6 +679,83 @@ async function revokeToken(){
     if(r.ok){out.className='out-box ok';out.textContent=`✓ Revoked\n${d.message}`;log(`Admin revoked · ${jti.slice(0,8)}…`,'wrn');}
     else{out.className='out-box err';out.textContent=`✗ ${JSON.stringify(d,null,2)}`;}
   }catch{out.className='out-box err';out.textContent='✗ Connection error';}
+}
+
+// ATTACK SIMULATOR — тус бүр нь жинхэнэ HTTP хүсэлтээр серверийг халддаг тул
+// Security Monitor / Event Log / Telegram Feed бодитоор хариу үзүүлнэ.
+const ATK_BUTTONS=['stolen','forge','replay','scan','brute','flood'];
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function atkSetBusy(busy){
+  ATK_BUTTONS.forEach(n=>{const b=document.getElementById(`atk-btn-${n}`);if(b)b.disabled=busy;});
+  const all=document.getElementById('atk-btn-all');if(all)all.disabled=busy;
+}
+function atkLine(text,who){
+  const box=document.getElementById('atk-console');
+  const d=document.createElement('div');
+  d.className=`atk-line-${who||'system'}`;
+  const prefix=who==='hacker'?'😈 ':who==='victim'?'👤 ':'🛡️ ';
+  d.textContent=prefix+text;
+  box.appendChild(d);
+  box.scrollTop=box.scrollHeight;
+}
+async function runAttack(name,clear=true){
+  const box=document.getElementById('atk-console');
+  if(clear)box.innerHTML='';
+  atkLine(`— ${name.toUpperCase()} халдлага эхэллээ —`,'system');
+  atkSetBusy(true);
+  try{
+    const r=await fetch(`${API}/demo/attack/${name}`,{method:'POST'});
+    const d=await r.json();
+    if(!r.ok){atkLine('✗ Алдаа: '+JSON.stringify(d),'system');return;}
+    for(const step of d.steps){
+      await sleep(450);
+      atkLine(step.text,step.who);
+    }
+  }catch{atkLine('✗ Сервертэй холбогдож чадсангүй','system');}
+  finally{atkSetBusy(false);}
+}
+function atkToggleSel(event,name){
+  event.stopPropagation();
+  const chk=document.getElementById(`atk-chk-${name}`);
+  const btn=document.getElementById(`atk-btn-${name}`);
+  if(btn)btn.classList.toggle('selected',chk.checked);
+  const all=document.getElementById('atk-chk-all');
+  if(all)all.checked=ATK_BUTTONS.every(n=>document.getElementById(`atk-chk-${n}`).checked);
+}
+function atkToggleSelAll(event){
+  const checked=event.target.checked;
+  ATK_BUTTONS.forEach(n=>{
+    const chk=document.getElementById(`atk-chk-${n}`);
+    const btn=document.getElementById(`atk-btn-${n}`);
+    if(chk)chk.checked=checked;
+    if(btn)btn.classList.toggle('selected',checked);
+  });
+}
+async function runSelectedAttacks(){
+  const box=document.getElementById('atk-console');
+  const selected=ATK_BUTTONS.filter(n=>document.getElementById(`atk-chk-${n}`)?.checked);
+  if(selected.length===0){
+    box.innerHTML='';
+    atkLine('⚠ Эхлээд дор хаяж нэг халдлагыг чагтална уу (checkbox)','system');
+    return;
+  }
+  box.innerHTML='';
+  atkLine(`Сонгосон ${selected.length} халдлагыг нэг нэгээр нь дараалуулж ажиллуулж байна — эрсдэл аажмаар нэмэгдэнэ…`,'system');
+  for(const name of selected){
+    await runAttack(name,false);
+    atkLine('',  'system');
+    await sleep(700);
+  }
+  atkLine('✅ Сонгосон халдлагууд дууслаа — Risk Score болон Security Monitor-ыг харна уу','system');
+}
+async function resetDemoState(){
+  const box=document.getElementById('atk-console');
+  atkLine('Тоолуур цэвэрлэж байна…','system');
+  try{
+    const r=await fetch(`${API}/admin/reset-demo`,{method:'POST',headers:{'Authorization':'Basic '+btoa('admin:admin123')}});
+    const d=await r.json();
+    atkLine(r.ok?`✓ ${d.message}`:`✗ ${JSON.stringify(d)}`,'system');
+  }catch{atkLine('✗ Сервертэй холбогдож чадсангүй','system');}
 }
 
 // RISK + DETECTOR SIGNALS

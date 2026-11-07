@@ -11,8 +11,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from token_engine import create_token, validate_token
 from destruct_engine import cleanup_job, destruct_token, DestructReason
-from redis_store import ping, token_exists, delete_token, r as redis_client
+from redis_store import ping, token_exists, delete_token, reset_demo_counters, r as redis_client
 from detectors import EndpointEnumerationDetector
+from attack_demo import ATTACKS
 
 enum_detector = EndpointEnumerationDetector()
 
@@ -188,6 +189,10 @@ async def sse_events(request: Request):
 async def dashboard():
     return FileResponse(os.path.join(os.path.dirname(__file__), "dashboard.html"))
 
+@app.get("/kr")
+async def dashboard_kr():
+    return FileResponse(os.path.join(os.path.dirname(__file__), "dashboard_kr.html"))
+
 @app.get("/health")
 async def health():
     redis_ok = ping()
@@ -252,3 +257,17 @@ async def stats(admin: str = Depends(verify_admin)):
         "used_jtis":     used_jtis,
         "scheduler":     "running" if scheduler.running else "stopped",
     }
+
+@app.post("/admin/reset-demo")
+async def reset_demo(admin: str = Depends(verify_admin)):
+    reset_demo_counters()
+    broadcast_event("log", {"msg": "Demo counters reset by admin", "level": "inf"})
+    return {"message": "Demo counters cleared"}
+
+@app.post("/demo/attack/{name}")
+async def run_attack(name: str, lang: str = "mn"):
+    fn = ATTACKS.get(name)
+    if not fn:
+        raise HTTPException(status_code=404, detail="unknown attack")
+    steps = await fn(lang=lang if lang in ("mn", "ko") else "mn")
+    return {"steps": steps}
