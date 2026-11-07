@@ -23,27 +23,28 @@ risk_scorer = RiskScorer()
 replay_detector = ReplayDetector()
 
 
-def create_token(user_id: str, request: Request, max_uses: int = MAX_USES) -> dict:
+def create_token(user_id: str, request: Request, max_uses: int = MAX_USES, ttl: int = None) -> dict:
     """Create a new token and store in Redis."""
     jti = str(uuid.uuid4())
     ctx_hash = get_context_hash(request)
     now = int(time.time())
+    ttl = ttl if ttl else TTL
 
     payload = {
         "jti":      jti,
         "sub":      user_id,
         "iat":      now,
-        "exp":      now + TTL,
+        "exp":      now + ttl,
         "ctx_hash": ctx_hash,
         "max_uses": max_uses,
     }
 
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-    store_token(jti, ctx_hash, ttl=TTL, max_uses=max_uses)
+    store_token(jti, ctx_hash, ttl=ttl, max_uses=max_uses)
 
     return {
         "token":      token,
-        "expires_in": TTL,
+        "expires_in": ttl,
         "jti":        jti,
     }
 

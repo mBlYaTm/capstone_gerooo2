@@ -152,6 +152,7 @@ def verify_admin(credentials: HTTPBasicCredentials = Depends(security)):
 class TokenRequest(BaseModel):
     user_id:  str
     max_uses: int = 10
+    ttl:      int | None = None
 
 class ValidateRequest(BaseModel):
     token: str
@@ -201,7 +202,7 @@ async def health():
 async def request_token(body: TokenRequest, request: Request):
     if not ping():
         raise HTTPException(status_code=503, detail="Redis is not connected")
-    result = create_token(body.user_id, request, max_uses=body.max_uses)
+    result = create_token(body.user_id, request, max_uses=body.max_uses, ttl=body.ttl)
     broadcast_event("log", {"msg": f"Token issued — {body.user_id} — {result['jti'][:8]}…", "level": "ok"})
     return result
 

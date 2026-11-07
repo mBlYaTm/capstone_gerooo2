@@ -194,6 +194,9 @@ body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-ser
 .trigger-list{display:flex;flex-direction:column;gap:6px;margin-top:18px}
 .trigger-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:8px;background:var(--bg-3);border:1px solid var(--border);transition:all .2s}
 .trigger-item:hover{border-color:var(--border-2)}
+.trigger-item.t-fired{background:rgba(239,68,68,0.14);border-color:rgba(239,68,68,0.6);box-shadow:0 0 14px rgba(239,68,68,0.3)}
+.trigger-item.t-fired .t-name{color:var(--red);font-weight:700}
+.trigger-item.t-fired .t-tag{color:var(--red);border-color:rgba(239,68,68,0.6)}
 .t-name{font-size:12px;color:var(--text-2)}
 .t-tag{font-size:9px;font-family:'Space Mono',monospace;color:var(--text-3);letter-spacing:1px;padding:2px 7px;border-radius:4px;border:1px solid var(--border);background:var(--bg-4)}
 
@@ -334,7 +337,8 @@ body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-ser
       </div>
       <div class="tab-pane active" id="tp-issue">
         <div class="f-group"><label class="f-label">User ID</label><input class="f-input" id="uid" value="alice" placeholder="identifier"></div>
-        <div class="f-group"><label class="f-label">Max Uses</label><input class="f-input" id="uses" type="number" value="10"></div>
+        <div class="f-group"><label class="f-label">Max Uses</label><input class="f-input" id="uses" type="number" value="10" min="1"></div>
+        <div class="f-group"><label class="f-label">TTL (seconds)</label><input class="f-input" id="ttl" type="number" value="300" min="1"></div>
         <button class="act-btn btn-primary" onclick="issueToken()">Issue Token →</button>
         <div class="out-box" id="out-issue">Waiting for request…</div>
         <div class="tok-box" id="tok-box" onclick="copyTok()"></div>
@@ -383,11 +387,11 @@ body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-ser
         <div class="risk-footer"><span style="font-size:10px;color:var(--text-3);font-family:'Space Mono',monospace">LOW · MEDIUM · HIGH</span><div class="risk-lbl" id="risk-lbl">LOW</div></div>
       </div>
       <div class="trigger-list">
-        <div class="trigger-item"><span class="t-name">① TTL Expiry</span><span class="t-tag">REDIS AUTO</span></div>
-        <div class="trigger-item"><span class="t-name">② Context Drift</span><span class="t-tag">IP CHANGE</span></div>
-        <div class="trigger-item"><span class="t-name">③ Max Uses</span><span class="t-tag">USE COUNT</span></div>
-        <div class="trigger-item"><span class="t-name">④ High Risk</span><span class="t-tag" style="color:var(--red);border-color:rgba(239,68,68,0.3)">ANOMALY</span></div>
-        <div class="trigger-item"><span class="t-name">⑤ Admin Revoke</span><span class="t-tag" style="color:var(--yellow);border-color:rgba(245,158,11,0.3)">MANUAL</span></div>
+        <div class="trigger-item" id="trig-ttl"><span class="t-name">① TTL Expiry</span><span class="t-tag">REDIS AUTO</span></div>
+        <div class="trigger-item" id="trig-ctx"><span class="t-name">② Context Drift</span><span class="t-tag">IP CHANGE</span></div>
+        <div class="trigger-item" id="trig-max"><span class="t-name">③ Max Uses</span><span class="t-tag">USE COUNT</span></div>
+        <div class="trigger-item" id="trig-high"><span class="t-name">④ High Risk</span><span class="t-tag" style="color:var(--red);border-color:rgba(239,68,68,0.3)">ANOMALY</span></div>
+        <div class="trigger-item" id="trig-admin"><span class="t-name">⑤ Admin Revoke</span><span class="t-tag" style="color:var(--yellow);border-color:rgba(245,158,11,0.3)">MANUAL</span></div>
       </div>
     </div>
   </div>
@@ -458,6 +462,36 @@ async function health(){
   }
 }
 health();setInterval(health,8000);
+
+// LIVE STATS POLL — Active Tokens from /admin/stats
+async function pollStats(){
+  try{
+    const r=await fetch(`${API}/admin/stats`,{headers:{'Authorization':'Basic '+btoa('admin:admin123')},signal:AbortSignal.timeout(4000)});
+    if(r.ok){const d=await r.json();const el=document.getElementById('s-tokens');if(el)el.textContent=d.active_tokens;}
+  }catch(e){}
+}
+pollStats();setInterval(pollStats,3000);
+
+// LIVE COUNTERS — driven by server events so auto-traffic moves them too
+function countFromLog(m){
+  if(/^(Token (issued|valid|rejected)|Admin revoked)/.test(m)){reqCount++;animate('s-req',reqCount);}
+  if(/^Token rejected/.test(m)){blocked++;animate('s-blocked',blocked);}
+}
+
+// DESTRUCT TRIGGERS — серверийн лог мессежээс аль устгах нөхцөл ажилласныг таниж, тухайн мөрийг 6 сек гэрэлтүүлнэ
+const _trigTimers={};
+function fireTrigger(id){
+  const el=document.getElementById(id); if(!el) return;
+  el.classList.add('t-fired');
+  if(_trigTimers[id]) clearTimeout(_trigTimers[id]);
+  _trigTimers[id]=setTimeout(()=>el.classList.remove('t-fired'),6000);
+}
+function triggerFromLog(m){
+  if(/context_drift/.test(m)) fireTrigger('trig-ctx');
+  else if(/high_risk/.test(m)) fireTrigger('trig-high');
+  else if(/max_uses/.test(m)||/uses left: 0\b/.test(m)) fireTrigger('trig-max');
+  else if(/^Admin revoked/.test(m)) fireTrigger('trig-admin');
+}
 
 // OFFLINE MODAL
 function onStatusClick(){
@@ -552,13 +586,13 @@ function addTelegramAlert(event,ip,score,reasons){
 async function issueToken(){
   const uid=document.getElementById('uid').value.trim()||'user';
   const uses=parseInt(document.getElementById('uses').value)||10;
+  const ttl=parseInt(document.getElementById('ttl').value)||300;
   const out=document.getElementById('out-issue');
   const box=document.getElementById('tok-box');
   out.className='out-box';out.textContent='Issuing…';box.style.display='none';
   try{
-    const r=await fetch(`${API}/request-token`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,max_uses:uses})});
+    const r=await fetch(`${API}/request-token`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_id:uid,max_uses:uses,ttl:ttl})});
     const d=await r.json();
-    reqCount++;animate('s-req',reqCount);
     if(r.ok){
       lastToken=d.token;
       out.className='out-box ok';
@@ -580,14 +614,12 @@ async function validateToken(){
   try{
     const r=await fetch(`${API}/validate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
     const d=await r.json();
-    reqCount++;animate('s-req',reqCount);
     if(r.ok){
       out.className='out-box ok';
       out.textContent=`✓ Token VALID\nUses left: ${d.uses_left}\nRisk: ${d.risk?.level||'LOW'} (${d.risk?.score||0})`;
       updateRisk(d.risk?.score||0,d.risk?.level||'LOW',d.risk?.reasons||[]);
       log(`Validated · uses left: ${d.uses_left}`,'ok');
     }else{
-      blocked++;animate('s-blocked',blocked);
       out.className='out-box err';
       const detail=d.detail||d;
       out.textContent=`✗ Token INVALID\n${JSON.stringify(detail,null,2)}`;
@@ -625,6 +657,16 @@ const DET_COLORS={
   endpoint_enumeration:{id:'d-enum',cls:'fired-cyan'}
 };
 
+// Детекторын гэрэл асаад 8 секунд асаалттай үлдэнэ (олон халдлага зэрэг гэрэлтэнэ)
+const _detTimers={};
+function fireDetector(key){
+  const d=DET_COLORS[key]; if(!d) return;
+  const el=document.getElementById(d.id); if(!el) return;
+  el.classList.add(d.cls);
+  if(_detTimers[key]) clearTimeout(_detTimers[key]);
+  _detTimers[key]=setTimeout(()=>el.classList.remove('fired-red','fired-yellow','fired-purple','fired-cyan'),8000);
+}
+
 function updateRisk(score,level,reasons){
   const bar=document.getElementById('risk-bar');
   const val=document.getElementById('risk-val');
@@ -636,23 +678,10 @@ function updateRisk(score,level,reasons){
   bar.style.background=map[level]||'var(--green)';
   lbl.style.color=map[level]||'var(--green)';
 
-  // Reset all detectors first
-  Object.values(DET_COLORS).forEach(({id,cls})=>{
-    document.getElementById(id).classList.remove('fired-red','fired-yellow','fired-purple','fired-cyan');
-  });
-
-  // Fire detectors based on reasons
-  reasons.forEach(reason=>{
-    const key=reason.toLowerCase().replace(/ /g,'_');
-    if(DET_COLORS[key]){
-      const el=document.getElementById(DET_COLORS[key].id);
-      el.classList.add(DET_COLORS[key].cls);
-    }
-  });
-
-  // If HIGH — fire all
+  // Гэрлийг дардаггүй — наалдацтай (fireDetector өөрөө 8 сек дараа унтраана)
+  reasons.forEach(reason=>fireDetector(reason.toLowerCase().replace(/ /g,'_')));
   if(level==='HIGH'&&reasons.length===0){
-    Object.values(DET_COLORS).forEach(({id,cls})=>document.getElementById(id).classList.add(cls));
+    Object.keys(DET_COLORS).forEach(fireDetector);
   }
 }
 
@@ -673,6 +702,8 @@ function connectSSE() {
         log('Dashboard connected to server · real-time active', 'inf');
       } else if (msg.type === 'log') {
         log(msg.data.msg, msg.data.level || 'inf');
+        countFromLog(msg.data.msg);
+        triggerFromLog(msg.data.msg);
       } else if (msg.type === 'telegram_alert') {
         const d = msg.data;
         addTelegramAlert(d.event, d.ip, d.score, d.reasons);
